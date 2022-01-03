@@ -2,7 +2,8 @@
 Dealing with colorspace.
 */
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::default::Default;
 use std::rc::Rc;
 
 use fltk::{
@@ -71,7 +72,7 @@ fn make_picker_row(ypos: i32, lab: &'static str)
     (lab, slider, vinput)
 }
 
-fn pick_color(col: RGB) -> Option<RGB> {
+pub fn pick_color(col: RGB) -> Option<RGB> {
     let mut w = DoubleWindow::default()
         .with_size(PICKER_LABEL_WIDTH + PICKER_SLIDER_WIDTH
                    + PICKER_INPUT_WIDTH + PICKER_COLOR_WINDOW_WIDTH,
@@ -174,7 +175,7 @@ fn pick_color(col: RGB) -> Option<RGB> {
     rvalue.get()
 }
 
-struct Gradient {
+pub struct Gradient {
     row: Pack,
     from: Button,
     to: Button,
@@ -243,19 +244,27 @@ impl Gradient {
     }
 }
 
+impl Default for Gradient {
+    fn default() -> Gradient {
+        Gradient::new(RGB::black(), RGB::black())
+    }
+}
+
 pub struct Pane {
     win: DoubleWindow,
     gradients: Vec<Gradient>,
     default_color: Button,
+    me: Option<Rc<RefCell<Pane>>>,
 }
 
-const PANE_WIDTH: i32 = GRADIENT_TOTAL_WIDTH + GRADIENT_BUTTON_SIZE;
+const PANE_WIDTH: i32 = GRADIENT_TOTAL_WIDTH + 2 * GRADIENT_BUTTON_SIZE;
+const REMOVE_BUTTON_XPOS: i32 = GRADIENT_TOTAL_WIDTH + GRADIENT_BUTTON_SIZE;
 
 impl Pane {
-    pub fn new() -> Pane {
+    pub fn new() -> Rc<RefCell<Pane>> {
         let mut grads: Vec<Gradient> = Vec::new();
         let mut def_c = Button::default()
-            .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
+            .with_size(2 * GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
         def_c.set_color(RGB::black().to_color());
         
         let mut w = DoubleWindow::default().with_label("Gradients")
@@ -270,11 +279,16 @@ impl Pane {
             }
         });
         
-        Pane {
+        let p = Pane {
             win: w,
             gradients: grads,
             default_color: def_c,
-        }
+            me: None,
+        };
+        
+        p.me = Some(Rc::new(RefCell::new(p)));
+        
+        p.me.unwrap().clone()
     }
     
     pub fn show(&mut self) {
@@ -289,23 +303,30 @@ impl Pane {
         
         for (n, grad) in self.gradients.iter_mut().enumerate() {
             let y_pos = (n as i32) * GRADIENT_BUTTON_SIZE;
-            let mut b = Button::default().with_label("+")
+            let mut ib = Button::default().with_label("@+")
                 .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
                 .with_pos(0, y_pos);
+            self.win.add(&ib);
+            
             self.win.add(grad.get_row());
             grad.set_pos(GRADIENT_BUTTON_SIZE, y_pos);
+            
+            let mut rb = Button::default().with_label("X")
+                .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
+                .with_pos(REMOVE_BUTTON_XPOS, y_pos);
+            self.win.add(&rb);
         }
         
         let add_row_ypos = (self.gradients.len() as i32) * GRADIENT_BUTTON_SIZE;
+        let add_butt = Button::default().with_label("@+")
+            .with_size(2 * GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
+            .with_pos(0, add_row_ypos);
+        self.win.add(&add_butt);
         let add_lab = Frame::default().with_label("append gradient")
             .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE)
-            .with_pos(0, add_row_ypos);
+            .with_pos(2 * GRADIENT_BUTTON_SIZE, add_row_ypos);
         self.win.add(&add_lab);
-        let add_butt = Button::default().with_label("+")
-            .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
-            .with_pos(GRADIENT_TOTAL_WIDTH, add_row_ypos);
-        self.win.add(&add_butt);
-        
+ 
         let default_row_ypos = add_row_ypos + GRADIENT_BUTTON_SIZE;
         let def_lab = Frame::default().with_label("default color")
             .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE)
@@ -320,6 +341,26 @@ impl Pane {
     pub fn push_gradient(&mut self, g: Gradient) {
         self.gradients.push(g);
         self.show();
+    }
+    
+    pub fn insert_gradient(&mut self, n: usize) {
+        if n >= self.gradients.len() {
+            match self.gradients.last() {
+                None => self.push_gradient(Gradient::default()),
+                Some(lg) => self.push_gradient(Gradient::new(lg.get_to(), RGB::black())),
+            }
+        } else {
+            let new_from = if n == 0 {
+                RGB::black()
+            } else {
+                self.gradients[n-1].get_from()
+            };
+            let new_to = self.gradients[n].get_from();
+            
+            let ng = Gradient::new(new_from, new_to);
+            self.gradients.insert(n, ng);
+            self.show();
+        }
     }
 }
 
@@ -359,7 +400,7 @@ mod test {
         let a = fltk::app::App::default();
         let mut p = Pane::new();
         let g = Gradient::new(RGB::black(), RGB::new(255.0, 255.0, 255.0));
-        p.push_gradient(g);
+        &p.push_gradient(g);
         
         a.run().unwrap();
     }

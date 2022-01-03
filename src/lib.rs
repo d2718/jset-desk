@@ -1,1 +1,1 @@
-mod rgb;
+pub mod rgb;
