@@ -1,5 +1,9 @@
 /*!
 Dealing with colorspace.
+
+The `rgb` module contains types and methods to convert between different
+color representations, as well as a collection of GUI elements for
+specifying a color map.
 */
 
 use std::cell::{Cell, RefCell};
@@ -9,6 +13,7 @@ use std::rc::Rc;
 use fltk::{
     prelude::*,
     button::Button,
+    enums::Align,
     frame::Frame,
     group::Pack,
     valuator::{HorNiceSlider, ValueInput},
@@ -21,9 +26,16 @@ const PICKER_SLIDER_WIDTH:       i32 = 256;
 const PICKER_INPUT_WIDTH:        i32 = 64;
 const PICKER_COLOR_WINDOW_WIDTH: i32 = 4 * PICKER_ROW_HEIGHT;
 
+/**
+Represents a color with red, green, and blue components as floating-point
+numbers in the range (0.0, 255.0). This is the form in which it's easiest
+to do calculations. Includes methods for converting to other useful data
+representations.
+*/
 #[derive(Debug, Clone, Copy)]
 pub struct RGB { r: f64, g: f64, b: f64 }
 
+// For constraining arguments to `RGB::new()` to the proper range.
 fn constrain_f64(x: f64) -> f64 {
     if x < 0.0 { 0.0 }
     else if x > 255.0 { 255.0 }
@@ -31,6 +43,8 @@ fn constrain_f64(x: f64) -> f64 {
 }
 
 impl RGB {
+    /** Instantiate a new `RGB` color representation with the given color
+    component values. Values outside the accepted range will be constrained. */
     pub fn new(newr: f64, newg: f64, newb: f64) -> RGB {
         RGB {
             r: constrain_f64(newr),
@@ -39,11 +53,13 @@ impl RGB {
         }
     }
 
+    /** Convert from a color value used by `fltk`. */
     pub fn from_color(col: fltk::enums::Color) -> RGB {
         let (rbyte, gbyte, bbyte) = col.to_rgb();
         RGB::new(rbyte as f64, gbyte as f64, bbyte as f64)
     }
     
+    /** Convert to a color value used by `fltk`. */
     pub fn to_color(&self) -> fltk::enums::Color {
         let rbyte = self.r as u8;
         let gbyte = self.g as u8;
@@ -52,6 +68,16 @@ impl RGB {
         fltk::enums::Color::from_rgb(rbyte, gbyte, bbyte)
     }
     
+    /** Convert to a four-byte array of `RGBA`. */
+    pub fn to_rgba(&self) -> [u8; 4] {
+        let rbyte = self.r as u8;
+        let gbyte = self.g as u8;
+        let bbyte = self.b as u8;
+        
+        [rbyte, gbyte, bbyte, 0xFF]
+    }
+    
+    /** The default color */
     pub fn black() -> RGB {
         RGB { r:0.0, g:0.0, b:0.0 }
     }
@@ -65,9 +91,9 @@ fn make_picker_row(ypos: i32, lab: &'static str)
     let mut vinput = ValueInput::new(PICKER_LABEL_WIDTH + PICKER_SLIDER_WIDTH,
                         ypos, PICKER_INPUT_WIDTH, PICKER_ROW_HEIGHT, None);
     
-    slider.set_range(0.0, 255.0); //vinput.set_range(0.0, 255.0);
+    slider.set_range(0.0, 255.0);
     vinput.set_bounds(0.0, 255.0);
-    slider.set_step(1.0, 1); //vinput.set_step(1.0, 1);
+    slider.set_step(1.0, 1);
     
     (lab, slider, vinput)
 }
@@ -79,14 +105,14 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
                    4 * PICKER_ROW_HEIGHT)
         .with_label("specify a color");
         
-    let (rlab, mut rslider, mut rvinput) = make_picker_row(0, "R");
-    let (glab, mut gslider, mut gvinput) = make_picker_row(PICKER_ROW_HEIGHT, "G");
-    let (blab, mut bslider, mut bvinput) = make_picker_row(2*PICKER_ROW_HEIGHT, "B");
+    let (_rlab, mut rslider, mut rvinput) = make_picker_row(0, "R");
+    let (_glab, mut gslider, mut gvinput) = make_picker_row(PICKER_ROW_HEIGHT, "G");
+    let (_blab, mut bslider, mut bvinput) = make_picker_row(2*PICKER_ROW_HEIGHT, "B");
     rslider.set_value(col.r); rvinput.set_value(col.r);
     gslider.set_value(col.g); gvinput.set_value(col.g);
     bslider.set_value(col.b); bvinput.set_value(col.b);
     
-    let mut prev = DoubleWindow::new(
+    let prev = DoubleWindow::new(
         PICKER_LABEL_WIDTH + PICKER_SLIDER_WIDTH + PICKER_INPUT_WIDTH, 0,
         PICKER_COLOR_WINDOW_WIDTH, 4*PICKER_ROW_HEIGHT, None);
     prev.end();
@@ -101,7 +127,7 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
     w.make_modal(true);
     w.show();
     
-    let mut get_rgb = {
+    let get_rgb = {
         let rv = rslider.clone();
         let gv = gslider.clone();
         let bv = bslider.clone();
@@ -116,10 +142,9 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
     
     let mut pc = prev.clone();
     let mut set_prev = {
-        let mut grgb = get_rgb.clone();
+        let grgb = get_rgb.clone();
         move || {
             let col = grgb();
-            let fltkcol = col.to_color();
             pc.set_color(col.to_color());
             pc.redraw();
         }
@@ -152,20 +177,20 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
         move |x| { i.set_value(x.value()); f(); }
     });
     
-    let mut picking = Rc::new(Cell::new(true));
-    let mut rvalue: Rc<Cell<Option<RGB>>> = Rc::new(Cell::new(None));
+    let picking = Rc::new(Cell::new(true));
+    let rvalue: Rc<Cell<Option<RGB>>> = Rc::new(Cell::new(None));
     
     ok.set_callback({
-        let mut p = picking.clone();
-        let mut r = rvalue.clone();
-        let mut grgb = get_rgb.clone();
+        let p = picking.clone();
+        let r = rvalue.clone();
+        let grgb = get_rgb.clone();
         move |_| {
             p.set(false); 
             r.set(Some(grgb()));
         }
     });
     no.set_callback({
-        let mut p = picking.clone();
+        let p = picking.clone();
         move |_| { p.set(false); }
     });
     
@@ -192,17 +217,22 @@ impl Gradient {
             .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
         rw.set_type(fltk::group::PackType::Horizontal);
         rw.end();
+        
         let mut fr = Button::default()
             .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
         fr.set_color(from_col.to_color());
+        fr.set_tooltip("start color");
+        
         let mut st = ValueInput::default()
             .with_size(GRADIENT_STEPS_WIDTH, GRADIENT_BUTTON_SIZE);
         st.set_value(256.0);
         st.set_minimum(0.0);
-        // st.set_step(1.0, 1);
+        st.set_tooltip("number of steps");
+        
         let mut t  = Button::default()
             .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
         t.set_color(to_col.to_color());
+        t.set_tooltip("end color");
         
         rw.add(&fr); rw.add(&st); rw.add(&t);
         
@@ -262,10 +292,10 @@ const REMOVE_BUTTON_XPOS: i32 = GRADIENT_TOTAL_WIDTH + GRADIENT_BUTTON_SIZE;
 
 impl Pane {
     pub fn new() -> Rc<RefCell<Pane>> {
-        let mut grads: Vec<Gradient> = Vec::new();
         let mut def_c = Button::default()
             .with_size(2 * GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
         def_c.set_color(RGB::black().to_color());
+        def_c.set_tooltip("set default color");
         
         let mut w = DoubleWindow::default().with_label("Gradients")
             .with_size(PANE_WIDTH, 3 * GRADIENT_BUTTON_SIZE);
@@ -279,16 +309,24 @@ impl Pane {
             }
         });
         
-        let p = Pane {
+        let p = Rc::new(RefCell::new(Pane {
             win: w,
-            gradients: grads,
+            gradients: Vec::new(),
             default_color: def_c,
             me: None,
-        };
+        }));
         
-        p.me = Some(Rc::new(RefCell::new(p)));
+        p.borrow_mut().me = Some(p.clone());
         
-        p.me.unwrap().clone()
+        p.clone()
+    }
+    
+    pub fn default() -> Rc<RefCell<Pane>> {
+        let p = Pane::new();
+        p.borrow_mut().default_color.set_color(fltk::enums::Color::White);
+        p.borrow_mut().insert_gradient(0);
+        
+        p
     }
     
     pub fn show(&mut self) {
@@ -306,6 +344,7 @@ impl Pane {
             let mut ib = Button::default().with_label("@+")
                 .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
                 .with_pos(0, y_pos);
+            ib.set_tooltip("insert new gradient");
             self.win.add(&ib);
             
             self.win.add(grad.get_row());
@@ -314,53 +353,71 @@ impl Pane {
             let mut rb = Button::default().with_label("X")
                 .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
                 .with_pos(REMOVE_BUTTON_XPOS, y_pos);
+            rb.set_tooltip("remove this gradient");
             self.win.add(&rb);
+            
+            ib.set_callback({
+                let p = self.me.as_ref().unwrap().clone();
+                move |_| { p.borrow_mut().insert_gradient(n); }
+            });
+            rb.set_callback({
+                let p = self.me.as_ref().unwrap().clone();
+                move |_| {
+                    p.borrow_mut().gradients.remove(n);
+                    p.borrow_mut().show();
+                }
+            });
         }
         
         let add_row_ypos = (self.gradients.len() as i32) * GRADIENT_BUTTON_SIZE;
-        let add_butt = Button::default().with_label("@+")
+        let mut add_butt = Button::default().with_label("@+")
             .with_size(2 * GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
             .with_pos(0, add_row_ypos);
+        add_butt.set_tooltip("append new gradient");
         self.win.add(&add_butt);
+        add_butt.set_callback({
+            let p = self.me.as_ref().unwrap().clone();
+            move |_| {
+                let n = p.borrow().gradients.len();
+                p.borrow_mut().insert_gradient(n)
+            }
+        });
+            
         let add_lab = Frame::default().with_label("append gradient")
             .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE)
             .with_pos(2 * GRADIENT_BUTTON_SIZE, add_row_ypos);
         self.win.add(&add_lab);
  
         let default_row_ypos = add_row_ypos + GRADIENT_BUTTON_SIZE;
-        let def_lab = Frame::default().with_label("default color")
-            .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE)
-            .with_pos(0, default_row_ypos);
-        self.win.add(&def_lab);
         self.default_color.set_pos(GRADIENT_TOTAL_WIDTH, default_row_ypos);
+        self.default_color.set_label("default color");
+        self.default_color.set_align(Align::Left);
         self.win.add(&self.default_color);
         
         self.win.redraw();
     }
     
-    pub fn push_gradient(&mut self, g: Gradient) {
-        self.gradients.push(g);
-        self.show();
-    }
-    
     pub fn insert_gradient(&mut self, n: usize) {
         if n >= self.gradients.len() {
-            match self.gradients.last() {
-                None => self.push_gradient(Gradient::default()),
-                Some(lg) => self.push_gradient(Gradient::new(lg.get_to(), RGB::black())),
-            }
+            let new_to = RGB::from_color(self.default_color.color());
+            let new_from = match self.gradients.last() {
+                None => RGB::black(),
+                Some(lg) => lg.get_to(),
+            };
+            let new_g = Gradient::new(new_from, new_to);
+            self.gradients.push(new_g);
         } else {
             let new_from = if n == 0 {
                 RGB::black()
             } else {
-                self.gradients[n-1].get_from()
+                self.gradients[n-1].get_to()
             };
             let new_to = self.gradients[n].get_from();
             
             let ng = Gradient::new(new_from, new_to);
             self.gradients.insert(n, ng);
-            self.show();
         }
+        self.show();
     }
 }
 
@@ -400,9 +457,8 @@ mod test {
         let a = fltk::app::App::default();
         let mut p = Pane::new();
         let g = Gradient::new(RGB::black(), RGB::new(255.0, 255.0, 255.0));
-        &p.push_gradient(g);
+        p.borrow_mut().push_gradient(g);
         
         a.run().unwrap();
     }
-        
 }
