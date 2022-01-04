@@ -83,6 +83,9 @@ impl RGB {
     }
 }
 
+/* This function is honestly just used to save typing in the body of
+   `pick_color()` below. I need three almost-identical rows of widgets,
+   and this function creates a row. */
 fn make_picker_row(ypos: i32, lab: &'static str)
 -> (Frame, HorNiceSlider, ValueInput) {
     let lab = Frame::new(0, ypos, PICKER_LABEL_WIDTH, PICKER_ROW_HEIGHT, lab);
@@ -98,6 +101,11 @@ fn make_picker_row(ypos: i32, lab: &'static str)
     (lab, slider, vinput)
 }
 
+/**
+Instantiates a modal RGB color picker window, then returns either
+  * `Some(RGB)` if the user selects a color
+  * `None` if the user clicks cancel
+*/
 pub fn pick_color(col: RGB) -> Option<RGB> {
     let mut w = DoubleWindow::default()
         .with_size(PICKER_LABEL_WIDTH + PICKER_SLIDER_WIDTH
@@ -200,6 +208,11 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
     rvalue.get()
 }
 
+/**
+Instantiates and wraps a UI element (rather, a collection of elements--a
+`group::Pack`) that represents a single gradient in a color map. The "from"
+color, the "to" color, and the number of steps between them are all editable.
+*/
 pub struct Gradient {
     row: Pack,
     from: Button,
@@ -207,11 +220,15 @@ pub struct Gradient {
     steps: ValueInput,
 }
 
+// width of a to/from color button; also the height of the entire row
 const GRADIENT_BUTTON_SIZE: i32 = 32;
+// width of the input for specifying the number of steps
 const GRADIENT_STEPS_WIDTH: i32 = 64;
+// calculated width of the entire `Pack`
 const GRADIENT_TOTAL_WIDTH: i32 = (2 * GRADIENT_BUTTON_SIZE) + GRADIENT_STEPS_WIDTH;
 
 impl Gradient {
+    /** Instantiate a new `Gradient` element from and to the given colors. */
     pub fn new(from_col: RGB, to_col: RGB) -> Gradient {
         let mut rw = Pack::default()
             .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
@@ -261,12 +278,17 @@ impl Gradient {
         }
     }
     
+    /// Set the position of the element in the containing window.
     pub fn set_pos(&mut self, x: i32, y: i32) { self.row.set_pos(x, y); }
     
+    /// Get a reference to the UI element for adding to `Window`s.
     pub fn get_row(&self) -> &Pack { &self.row }
     
+    /// Get the starting color.
     pub fn get_from(&self) -> RGB { RGB::from_color(self.from.color()) }
+    /// Get the ending color.
     pub fn get_to(&self)   -> RGB { RGB::from_color(self.to.color()) }
+    /// Get the number of steps from "start" to "end" color.
     pub fn get_steps(&self) -> usize { 
         let v = self.steps.value();
         if v < 0.0 { 0usize }
@@ -275,11 +297,18 @@ impl Gradient {
 }
 
 impl Default for Gradient {
+    /// A `Default` `Gradient` goes from black to black.
     fn default() -> Gradient {
         Gradient::new(RGB::black(), RGB::black())
     }
 }
 
+/**
+Instantiates and wraps the UI window for specifying the color map. The
+internals require references to the struct in order to function properly
+(this is undoubtedly an anti-pattern), so the `new()` "constructor" returns
+an `Rc<RefCell<Pane>>`.
+*/
 pub struct Pane {
     win: DoubleWindow,
     gradients: Vec<Gradient>,
@@ -287,10 +316,14 @@ pub struct Pane {
     me: Option<Rc<RefCell<Pane>>>,
 }
 
+// calculated width of the `Pane` window
 const PANE_WIDTH: i32 = GRADIENT_TOTAL_WIDTH + 2 * GRADIENT_BUTTON_SIZE;
+// another useful calculated with
 const REMOVE_BUTTON_XPOS: i32 = GRADIENT_TOTAL_WIDTH + GRADIENT_BUTTON_SIZE;
 
 impl Pane {
+    /** Instantiate the color map UI and return an `Rc<RefCell<Pane>>` to
+    the wrapping structure. */
     pub fn new() -> Rc<RefCell<Pane>> {
         let mut def_c = Button::default()
             .with_size(2 * GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
@@ -321,6 +354,8 @@ impl Pane {
         p.clone()
     }
     
+    /** Instantiate the UI with the "default" color map, which is a single
+    gradient of 256 steps from black to white. */
     pub fn default() -> Rc<RefCell<Pane>> {
         let p = Pane::new();
         p.borrow_mut().default_color.set_color(fltk::enums::Color::White);
@@ -329,7 +364,8 @@ impl Pane {
         p
     }
     
-    pub fn show(&mut self) {
+    /** Redraw the UI when necessary. */
+    fn show(&mut self) {
         for grad in self.gradients.iter() {
             self.win.remove(grad.get_row());
         }
@@ -397,7 +433,14 @@ impl Pane {
         self.win.redraw();
     }
     
-    pub fn insert_gradient(&mut self, n: usize) {
+    /**
+    Inserts a new `Gradient` at position `n`, moving the `Gradient` there and
+    all subsequent positions forward. If `n` is past the end of the `Gradient`
+    vector, it will be appended to the end. Starting and ending colors of the
+    inserted `Gradient` will be automatically set to match up with adjacent
+    gradients.
+    */
+    fn insert_gradient(&mut self, n: usize) {
         if n >= self.gradients.len() {
             let new_to = RGB::from_color(self.default_color.color());
             let new_from = match self.gradients.last() {
@@ -455,9 +498,7 @@ mod test {
     #[test]
     fn make_pane() {
         let a = fltk::app::App::default();
-        let mut p = Pane::new();
-        let g = Gradient::new(RGB::black(), RGB::new(255.0, 255.0, 255.0));
-        p.borrow_mut().push_gradient(g);
+        let p = Pane::default();
         
         a.run().unwrap();
     }
