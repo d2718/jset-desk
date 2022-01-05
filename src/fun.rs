@@ -9,7 +9,8 @@ use std::rc::Rc;
 
 use fltk::{
     prelude::*,
-    enums::Font,
+    button::Button,
+    enums::{Align, Font},
     frame::Frame,
     group::Pack,
     input::IntInput,
@@ -115,7 +116,7 @@ impl Coef {
     }
 }
  
-const DEFAULT_PANE_HEIGHT: i32 = ROW_HEIGHT * 8;
+const DEFAULT_PANE_HEIGHT: i32 = ROW_HEIGHT * 11;
 const SELECTOR_WIDTH: i32 = 160;
  
 pub struct Pane {
@@ -153,23 +154,31 @@ impl Pane {
         pw.deactivate();
         
         let mut cs: Vec<Coef> = Vec::new();
-        cs.push(Coef::new(&Coef::term_label(0), 1.0, 0.0));
-        cs.push(Coef::new(&Coef::term_label(1), 0.0, 0.0));
-        cs.push(Coef::new(&Coef::term_label(2), 1.0, 0.0));
         
         let mut pyw = DoubleWindow::default()
-            .with_size(ROW_WIDTH, 4 * ROW_HEIGHT)
+            .with_size(ROW_WIDTH, 7 * ROW_HEIGHT)
             .with_pos(0, 4 * ROW_HEIGHT);
         let pyw_lab = Frame::default().with_size(ROW_WIDTH, ROW_HEIGHT)
             .with_label("Polynomial Coefficients").with_pos(0, 0);
+        let mut c = Coef::new(&Coef::term_label(0), 1.0, 0.0);
+        c.get_mut_row().set_pos(0, ROW_HEIGHT);
+        cs.push(c);
+        let mut c = Coef::new(&Coef::term_label(1), 0.0, 0.0);
+        c.get_mut_row().set_pos(0, 2 * ROW_HEIGHT);
+        cs.push(c);
+        let mut c = Coef::new(&Coef::term_label(2), 1.0, 0.0);
+        c.get_mut_row().set_pos(0, 3 * ROW_HEIGHT);
+        cs.push(c);
+        let mut coeff_del = Button::default()
+            .with_pos(ROW_HEIGHT, 5 * ROW_HEIGHT)
+            .with_size(ROW_HEIGHT, ROW_HEIGHT)
+            .with_label("decrease degree").with_align(Align::Right);
+        let mut coeff_add = Button::default()
+            .with_pos(ROW_WIDTH - (2 * ROW_HEIGHT), 6 * ROW_HEIGHT)
+            .with_size(ROW_HEIGHT, ROW_HEIGHT)
+            .with_label("increase degree").with_align(Align::Left);
         pyw.end();
         pyw.deactivate();
-        
-        for (n, c) in cs.iter_mut().enumerate() {
-            let i = n as i32;
-            c.get_mut_row().set_pos(0, (i + 1) * ROW_HEIGHT);
-            pyw.add(c.get_row());
-        }
         
         let cs = Rc::new(RefCell::new(cs));
         
@@ -181,6 +190,51 @@ impl Pane {
                 1 => { pw.activate(); pyw.deactivate(); },
                 2 => { pw.deactivate(); pyw.activate(); },
                 n @ _ => { eprintln!("Pane::selector callback illegal value: {}", n); },
+            }
+        });
+        
+        coeff_del.set_callback({
+            let mut win = w.clone();
+            let mut pyw = pyw.clone();
+            let mut ob  = coeff_add.clone();
+            let cs = cs.clone();
+            move |b| {
+                if cs.borrow().len() > 1 {
+                    let mut dc = cs.borrow_mut().pop().unwrap();
+                    pyw.remove(dc.get_row());
+                    let (w, h) = (pyw.w(), pyw.h());
+                    pyw.set_size(w, h - ROW_HEIGHT);
+                    let h = win.h();
+                    win.set_size(w, h - ROW_HEIGHT);
+                    let (x, y) = (b.x(), b.y());
+                    b.set_pos(x, y - ROW_HEIGHT);
+                    let (x, y) = (ob.x(), ob.y());
+                    ob.set_pos(x, y - ROW_HEIGHT);
+                    Pack::delete(dc.row);
+                }   
+            }
+        });
+        
+        coeff_add.set_callback({
+            let mut win = w.clone();
+            let mut pyw = pyw.clone();
+            let mut ob  = coeff_del.clone();
+            let cs = cs.clone();
+            move |b| {
+                let ncoeffs = cs.borrow().len();
+                let y_pos = (ncoeffs + 1) as i32 * ROW_HEIGHT;
+                let mut new_coeff = Coef::new(&Coef::term_label(ncoeffs), 0.0, 0.0);
+                pyw.add(new_coeff.get_row());
+                new_coeff.get_mut_row().set_pos(0, y_pos);
+                cs.borrow_mut().push(new_coeff);
+                let (w, h) = (win.w(), win.h());
+                win.set_size(w, h + ROW_HEIGHT);
+                let (w, h) = (pyw.w(), pyw.h());
+                pyw.set_size(w, h + ROW_HEIGHT);
+                let (x, y) = (b.x(), b.y());
+                b.set_pos(x, y + ROW_HEIGHT);
+                let (x, y) = (ob.x(), ob.y());
+                ob.set_pos(x, y + ROW_HEIGHT);
             }
         });
         
