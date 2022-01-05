@@ -4,12 +4,16 @@ Specifying the iteration function and parameters.
 
 #![allow(dead_code)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use fltk::{
     prelude::*,
     enums::Font,
     frame::Frame,
     group::Pack,
     input::IntInput,
+    menu::Choice,
     valuator::ValueInput,
     window::DoubleWindow,
 };
@@ -21,6 +25,8 @@ const DEGREE_LABEL_WIDTH: i32 = 48;
 const VAR_LABEL_WIDTH: i32 = 16;
 const VAR_INPUT_WIDTH: i32 = 72;
 pub const ROW_WIDTH: i32 = DEGREE_LABEL_WIDTH + (4 * VAR_LABEL_WIDTH) + (2 * VAR_INPUT_WIDTH);
+
+const MATH_FONT: Font = Font::HelveticaItalic;
 
 /**
 Instantiates and wraps a chunk of UI elements for specifying a complex
@@ -46,12 +52,12 @@ impl Coef {
         
         let mut deg_lab = Frame::default()
             .with_size(DEGREE_LABEL_WIDTH, ROW_HEIGHT);
-        deg_lab.set_label_font(Font::HelveticaItalic);
+        deg_lab.set_label_font(MATH_FONT);
         deg_lab.set_label(term);
         
         let mut rlab = Frame::default().with_label("r:")
             .with_size(VAR_LABEL_WIDTH, ROW_HEIGHT);
-        rlab.set_label_font(Font::HelveticaItalic);
+        rlab.set_label_font(MATH_FONT);
         
         let mut r_input = ValueInput::default()
             .with_size(VAR_INPUT_WIDTH, ROW_HEIGHT);
@@ -89,6 +95,7 @@ impl Coef {
     /** Get a reference to the underlying `Pack` so it can be inserted into
     a larger UI element. */
     pub fn get_row(&self) -> &Pack { &self.row }
+    pub fn get_mut_row(&mut self) -> &mut Pack { &mut self.row }
     
     /** Get the specified coefficient value. */
     pub fn get_value(&self) -> Cx {
@@ -108,12 +115,91 @@ impl Coef {
     }
 }
  
-//~ pub struct Pane {
-    //~ win:    DoubleWindow,
-    //~ width:  IntInput,
-    //~ height: IntInput,
-    
-//~ }
+const DEFAULT_PANE_HEIGHT: i32 = ROW_HEIGHT * 8;
+const SELECTOR_WIDTH: i32 = 160;
+ 
+pub struct Pane {
+    win:    DoubleWindow,
+    selector: Choice,
+    pm_win:   DoubleWindow,
+    poly_win: DoubleWindow,
+    pm_a:     Coef,
+    pm_b:     Coef,
+    coefs:    Rc<RefCell<Vec<Coef>>>,
+}
+
+impl Pane {
+    pub fn new() -> Pane {
+        let mut w = DoubleWindow::default().with_label("Iterator Options")
+            .with_size(ROW_WIDTH, DEFAULT_PANE_HEIGHT);
+        
+        let mut sel = Choice::default().with_label("Iterator")
+            .with_size(SELECTOR_WIDTH, ROW_HEIGHT)
+            .with_pos(ROW_WIDTH - SELECTOR_WIDTH, 0);
+        sel.add_choice("Mandlebrot|Pseudo-Mandlebrot|Polynomial");
+        sel.set_value(0);
+        
+        let mut pw = DoubleWindow::default()
+            .with_size(ROW_WIDTH, 3 * ROW_HEIGHT)
+            .with_pos(0, ROW_HEIGHT);
+        let mut pw_label = Frame::default().with_size(ROW_WIDTH, ROW_HEIGHT)
+            .with_pos(0, 0).with_label("az^2 + bc");
+        pw_label.set_label_font(MATH_FONT);
+        let mut a = Coef::new("a", 1.0, 0.0);
+        a.get_mut_row().set_pos(0, ROW_HEIGHT);
+        let mut b = Coef::new("b", 1.0, 0.0);
+        b.get_mut_row().set_pos(0, 2 * ROW_HEIGHT);
+        pw.end();
+        pw.deactivate();
+        
+        let mut cs: Vec<Coef> = Vec::new();
+        cs.push(Coef::new(&Coef::term_label(0), 1.0, 0.0));
+        cs.push(Coef::new(&Coef::term_label(1), 0.0, 0.0));
+        cs.push(Coef::new(&Coef::term_label(2), 1.0, 0.0));
+        
+        let mut pyw = DoubleWindow::default()
+            .with_size(ROW_WIDTH, 4 * ROW_HEIGHT)
+            .with_pos(0, 4 * ROW_HEIGHT);
+        let pyw_lab = Frame::default().with_size(ROW_WIDTH, ROW_HEIGHT)
+            .with_label("Polynomial Coefficients").with_pos(0, 0);
+        pyw.end();
+        pyw.deactivate();
+        
+        for (n, c) in cs.iter_mut().enumerate() {
+            let i = n as i32;
+            c.get_mut_row().set_pos(0, (i + 1) * ROW_HEIGHT);
+            pyw.add(c.get_row());
+        }
+        
+        let cs = Rc::new(RefCell::new(cs));
+        
+        sel.set_callback({
+            let mut pw = pw.clone();
+            let mut pyw = pyw.clone();
+            move |x| match x.value() {
+                0 => { pw.deactivate(); pyw.deactivate(); },
+                1 => { pw.activate(); pyw.deactivate(); },
+                2 => { pw.deactivate(); pyw.activate(); },
+                n @ _ => { eprintln!("Pane::selector callback illegal value: {}", n); },
+            }
+        });
+        
+        w.end();
+        w.show();
+        
+        let p = Pane {
+            win:      w.clone(),
+            selector: sel.clone(),
+            pm_win:   pw.clone(),
+            poly_win: DoubleWindow::default(),
+            pm_a:     a,
+            pm_b:     b,
+            coefs:    cs,
+        };
+        
+        p
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -145,6 +231,14 @@ mod test {
         });
         p.add(&b);
         w.show();
+        a.run().unwrap();
+    }
+    
+    #[test]
+    fn make_fun_pane() {
+        let a = fltk::app::App::default();
+        let p = Pane::new();
+        
         a.run().unwrap();
     }
 }
