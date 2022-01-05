@@ -479,7 +479,7 @@ mod test {
     #[test]
     fn make_gradient() {
         let a = fltk::app::App::default();
-        let mut g = Gradient::new(RGB::black(), RGB::black());
+        let g = Gradient::new(RGB::black(), RGB::black());
         let mut w = DoubleWindow::default().with_size(400, 400);
         w.add(g.get_row());
         let mut b = Button::default().with_pos(100, 100)
@@ -498,7 +498,7 @@ mod test {
     #[test]
     fn make_pane() {
         let a = fltk::app::App::default();
-        let p = Pane::default();
+        let _ = Pane::default();
         
         a.run().unwrap();
     }
