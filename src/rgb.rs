@@ -83,6 +83,22 @@ impl RGB {
     }
 }
 
+pub fn color_average(dat: &[RGB]) -> RGB {
+    let mut rtot = 0.0f32;
+    let mut gtot = 0.0f32;
+    let mut btot = 0.0f32;
+    
+    for pix in dat.iter() {
+        rtot += pix.r;
+        gtot += pix.g;
+        btot += pix.b;
+    }
+    
+    let n_float = dat.len() as f32;
+    
+    RGB::new(rtot/n_float, gtot/n_float, btot/n_float)
+}
+
 /* This function is honestly just used to save typing in the body of
    `pick_color()` below. I need three almost-identical rows of widgets,
    and this function creates a row. */

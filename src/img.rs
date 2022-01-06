@@ -2,6 +2,9 @@
 module for generating the image window and getting image size/zoom parameters
 */
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use fltk::{
     prelude::*,
     button::RadioRoundButton,
@@ -14,31 +17,16 @@ use fltk::{
     window::DoubleWindow,
 };
 
+use crate::rgb;
 use crate::rgb::RGB;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct ImageParams {
     xpix: usize,
     ypix: usize,
     x: f64,
     y: f64,
     width: f64,
-}
-
-fn color_average(dat: &[RGB]) -> RGB {
-    let mut rtot = 0.0f32;
-    let mut gtot = 0.0f32;
-    let mut btot = 0.0f32;
-    
-    for pix in dat.iter() {
-        rtot += pix.r;
-        gtot += pix.g;
-        btot += pix.b;
-    }
-    
-    let n_float = dat.len() as f32;
-    
-    RGB::new(rtot/n_float, gtot/n_float, btot/n_float)
 }
 
 struct Pane {
@@ -53,6 +41,7 @@ struct Pane {
     img_zoom_3: RadioRoundButton,
     img_zoom_4: RadioRoundButton,
     image_data: Vec<u8>,
+    rgb_data: Vec<RGB>,
     current_params: ImageParams,
 }
 
@@ -61,15 +50,16 @@ const CTRL_COLUMN_WIDTH: i32 = 72;
 const CTRL_COLUMN_HEIGHT: i32 = ROW_HEIGHT * 10;
 
 impl Pane {
-    pub fn new(params: ImageParams) -> Pane {
+    pub fn new(params: ImageParams) -> Rc<RefCell<Pane>> {
         let (fxpix, fypix) = (params.xpix as i32, params.ypix as i32);
         let mut w = DoubleWindow::default().with_label("JSet-Desktop")
-            .with_size(fxpix + CTRL_COLUMN_WIDTH, fypix);
+            .with_size(16, 16);
         w.set_border(true);
         w.make_resizable(true);
         
         let scroll_region = Scroll::default().with_pos(0, 0)
-            .with_size(fxpix + CTRL_COLUMN_WIDTH, fypix);
+            .with_size(fxpix + CTRL_COLUMN_WIDTH, fypix)
+            .with_type(fltk::group::ScrollType::BothAlways);
         let mut imgf = Frame::default().with_pos(CTRL_COLUMN_WIDTH, 0)
             .with_size(fxpix, fypix);
         imgf.set_color(Color::Black);
@@ -106,6 +96,10 @@ impl Pane {
         scroll_region.end();
         w.end();
         w.show();
+        let scroll_size = scroll_region.scrollbar_size();
+        println!("scrollbar size: {}", scroll_size);
+        w.set_size(fxpix + CTRL_COLUMN_WIDTH + scroll_size, fypix + scroll_size);
+        w.redraw();
         
         width_pix_ipt.set_callback({
             let mut f = imgf.clone();
@@ -141,11 +135,32 @@ impl Pane {
             current_params: params,
             zoom_ipt: zoom_amt_ipt.clone(),
             nudge_ipt: nudge_amt_ipt.clone(),
+            image_data: Vec::new(),
+            rgb_data: Vec::new(),
             img_zoom_1: ab1.clone(),
             img_zoom_2: ab2.clone(),
             img_zoom_3: ab3.clone(),
             img_zoom_4: ab4.clone(),
         };
+        
+        let p = Rc::new(RefCell::new(p));
+        
+        ab1.set_callback({
+            let mut p = p.clone();
+            move |_| { p.borrow_mut().redraw_image(); }
+        });
+        ab2.set_callback({
+            let mut p = p.clone();
+            move |_| { p.borrow_mut().redraw_image(); }
+        });
+        ab3.set_callback({
+            let mut p = p.clone();
+            move |_| { p.borrow_mut().redraw_image(); }
+        });
+        ab4.set_callback({
+            let mut p = p.clone();
+            move |_| { p.borrow_mut().redraw_image(); }
+        });
         
         p
     }
@@ -158,12 +173,10 @@ impl Pane {
         else { None }
     }
     
-    pub fn set_image(
-        &mut self,
-        width: usize,
-        height: usize,
-        pixvals: &[RGB]
-    ) {
+    pub fn redraw_image(&mut self) {
+        let width  = self.current_params.xpix;
+        let height = self.current_params.ypix;
+        
         let chunk = match self.get_img_zoom_state() {
             Some(n) => n,
             None => {
@@ -186,26 +199,43 @@ impl Pane {
                 for y in 0..chunk {
                     let po = offs + (width * y);
                     for x in 0..chunk {
-                        palette[pp] = pixvals[po+x];
+                        palette[pp] = self.rgb_data[po+x];
                         pp += 1;
                     }
                 }
-                let avg_p = color_average(&palette[0..pp]);
+                let avg_p = rgb::color_average(&palette[0..pp]);
                 for b in avg_p.to_rgba().iter() { rgba_data.push(*b); }
             }
         }
-        
-        self.image_data = rgb_data;
+
+        self.image_data = rgba_data;
         let frame_image = unsafe {
             RgbImage::from_data(
                 &self.image_data,
                 pixcols as i32,
                 pixlines as i32,
                 fltk::enums::ColorDepth::Rgba8
-            ).unwrap();
-        }
+            ).unwrap()
+        };
         
+        self.img_frame.set_size(pixcols as i32, pixlines as i32);
         self.img_frame.set_image(Some(frame_image));
+        self.win.redraw();
+        
+    }
+    
+    pub fn set_image(
+        &mut self,
+        width: usize,
+        height: usize,
+        pixvals: Vec<RGB>
+    ) {
+        self.rgb_data = pixvals;
+        self.img_frame.set_size(width as i32, height as i32);
+        self.current_params.xpix = width;
+        self.current_params.ypix = height;
+        
+        self.redraw_image();
     }
 }
 
@@ -217,13 +247,28 @@ mod test {
     fn make_image_pane() {
         let a = fltk::app::App::default();
         let parms = ImageParams {
-            xpix: 800,
-            ypix: 600,
+            xpix: 400,
+            ypix: 300,
             x: -2.0,
             y: 1.0,
             width: 3.0
         };
         let mut p = Pane::new(parms);
+        
+        let (img_w, img_h): (usize, usize) = (400, 300);
+        let mut img_vec: Vec<RGB> = Vec::with_capacity(img_w * img_h);
+        let (img_wf, img_hf) = (img_w as f32, img_h as f32);
+        for y in 0..img_h {
+            let y_frac = (y as f32) / img_hf;
+            let gval = 255.0 * y_frac;
+            for x in 0..img_w {
+                let x_frac = (x as f32) / img_wf;
+                let bval = 255.0 * x_frac;
+                img_vec.push(RGB::new(0.0, gval, bval));
+            }
+        }
+        
+        p.borrow_mut().set_image(img_w, img_h, img_vec);
         
         a.run().unwrap();
     }
