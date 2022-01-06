@@ -2,8 +2,6 @@
 Specifying the iteration function and parameters.
 */
 
-#![allow(dead_code)]
-
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -13,13 +11,13 @@ use fltk::{
     enums::{Align, Font},
     frame::Frame,
     group::Pack,
-    input::IntInput,
     menu::Choice,
     valuator::ValueInput,
     window::DoubleWindow,
 };
 
 use crate::cx::Cx;
+use crate::iter::IterParams;
 
 const ROW_HEIGHT: i32 = 32;
 const DEGREE_LABEL_WIDTH: i32 = 48;
@@ -117,7 +115,7 @@ impl Coef {
 }
  
 const DEFAULT_PANE_HEIGHT: i32 = ROW_HEIGHT * 11;
-const SELECTOR_WIDTH: i32 = 160;
+const SELECTOR_WIDTH: i32 = 192;
  
 pub struct Pane {
     win:    DoubleWindow,
@@ -158,7 +156,7 @@ impl Pane {
         let mut pyw = DoubleWindow::default()
             .with_size(ROW_WIDTH, 7 * ROW_HEIGHT)
             .with_pos(0, 4 * ROW_HEIGHT);
-        let pyw_lab = Frame::default().with_size(ROW_WIDTH, ROW_HEIGHT)
+        let _ = Frame::default().with_size(ROW_WIDTH, ROW_HEIGHT)
             .with_label("Polynomial Coefficients").with_pos(0, 0);
         let mut c = Coef::new(&Coef::term_label(0), 1.0, 0.0);
         c.get_mut_row().set_pos(0, ROW_HEIGHT);
@@ -200,7 +198,7 @@ impl Pane {
             let cs = cs.clone();
             move |b| {
                 if cs.borrow().len() > 1 {
-                    let mut dc = cs.borrow_mut().pop().unwrap();
+                    let dc = cs.borrow_mut().pop().unwrap();
                     pyw.remove(dc.get_row());
                     let (w, h) = (pyw.w(), pyw.h());
                     pyw.set_size(w, h - ROW_HEIGHT);
@@ -252,6 +250,23 @@ impl Pane {
         };
         
         p
+    }
+    
+    pub fn get_params(&self) -> IterParams {
+        match self.selector.value() {
+            0 => IterParams::Mandlebrot,
+            1 => IterParams::PseudoMandlebrot(
+                self.pm_a.get_value(),
+                self.pm_b.get_value()
+            ),
+            2 => IterParams::Polynomial(
+                self.coefs.borrow().iter().map(|c| c.get_value()).collect()
+            ),
+            n @ _ => {
+                eprintln!("Illegal iterator input value: {}", &n);
+                IterParams::Mandlebrot
+            },
+        }
     }
 }
 

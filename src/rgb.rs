@@ -33,10 +33,10 @@ to do calculations. Includes methods for converting to other useful data
 representations.
 */
 #[derive(Debug, Clone, Copy)]
-pub struct RGB { r: f64, g: f64, b: f64 }
+pub struct RGB { r: f32, g: f32, b: f32 }
 
 // For constraining arguments to `RGB::new()` to the proper range.
-fn constrain_f64(x: f64) -> f64 {
+fn constrain_f32(x: f32) -> f32 {
     if x < 0.0 { 0.0 }
     else if x > 255.0 { 255.0 }
     else { x }
@@ -45,18 +45,18 @@ fn constrain_f64(x: f64) -> f64 {
 impl RGB {
     /** Instantiate a new `RGB` color representation with the given color
     component values. Values outside the accepted range will be constrained. */
-    pub fn new(newr: f64, newg: f64, newb: f64) -> RGB {
+    pub fn new(newr: f32, newg: f32, newb: f32) -> RGB {
         RGB {
-            r: constrain_f64(newr),
-            g: constrain_f64(newg),
-            b: constrain_f64(newb),
+            r: constrain_f32(newr),
+            g: constrain_f32(newg),
+            b: constrain_f32(newb),
         }
     }
 
     /** Convert from a color value used by `fltk`. */
     pub fn from_color(col: fltk::enums::Color) -> RGB {
         let (rbyte, gbyte, bbyte) = col.to_rgb();
-        RGB::new(rbyte as f64, gbyte as f64, bbyte as f64)
+        RGB::new(rbyte as f32, gbyte as f32, bbyte as f32)
     }
     
     /** Convert to a color value used by `fltk`. */
@@ -116,9 +116,9 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
     let (_rlab, mut rslider, mut rvinput) = make_picker_row(0, "R");
     let (_glab, mut gslider, mut gvinput) = make_picker_row(PICKER_ROW_HEIGHT, "G");
     let (_blab, mut bslider, mut bvinput) = make_picker_row(2*PICKER_ROW_HEIGHT, "B");
-    rslider.set_value(col.r); rvinput.set_value(col.r);
-    gslider.set_value(col.g); gvinput.set_value(col.g);
-    bslider.set_value(col.b); bvinput.set_value(col.b);
+    rslider.set_value(col.r as f64); rvinput.set_value(col.r as f64);
+    gslider.set_value(col.g as f64); gvinput.set_value(col.g as f64);
+    bslider.set_value(col.b as f64); bvinput.set_value(col.b as f64);
     
     let prev = DoubleWindow::new(
         PICKER_LABEL_WIDTH + PICKER_SLIDER_WIDTH + PICKER_INPUT_WIDTH, 0,
@@ -141,9 +141,9 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
         let bv = bslider.clone();
         move || {
             RGB::new(
-                rv.value(),
-                gv.value(),
-                bv.value(),
+                rv.value() as f32,
+                gv.value() as f32,
+                bv.value() as f32,
             )
         }
     };
@@ -303,6 +303,48 @@ impl Default for Gradient {
     }
 }
 
+/** Maps iterations-to-diverge to colors. */
+pub struct ColorMap {
+    /// mapping from iterations (`usize`) to color `RBG`
+    data: Vec<RGB>,
+    /// anything that iterates off the end of `data` gets this color
+    default: RGB,
+}
+
+impl ColorMap {
+    pub fn make(gradients: &[Gradient], def: RGB) -> ColorMap {
+        let total_steps = gradients.iter().map(|g| g.get_steps()).sum();
+        let mut new_data: Vec<RGB> = Vec::with_capacity(total_steps);
+        
+        for g in gradients.iter() {
+            let c0 = g.get_from();
+            let c1 = g.get_to();
+            let delta_r = c1.r - c0.r;
+            let delta_g = c1.g - c0.g;
+            let delta_b = c1.b - c0.b;
+            let gradient_steps = g.get_steps() as f32;
+            for n in 0usize..g.get_steps() {
+                let frac = (n as f32) / gradient_steps;
+                let c = RGB::new(
+                    c0.r + frac*delta_r,
+                    c0.g + frac*delta_g,
+                    c0.b + frac*delta_b,
+                );
+                new_data.push(c);
+            }
+        }
+        
+        ColorMap { data: new_data, default: def }
+    }
+    
+    pub fn get(&self, n: usize) -> RGB {
+        match self.data.get(n) {
+            None => self.default,
+            Some(c) => *c,
+        }
+    }
+}
+
 /**
 Instantiates and wraps the UI window for specifying the color map. The
 internals require references to the struct in order to function properly
@@ -330,7 +372,7 @@ impl Pane {
         def_c.set_color(RGB::black().to_color());
         def_c.set_tooltip("set default color");
         
-        let mut w = DoubleWindow::default().with_label("Gradients")
+        let mut w = DoubleWindow::default().with_label("Color Map")
             .with_size(PANE_WIDTH, 3 * GRADIENT_BUTTON_SIZE);
         w.end();
         w.show();
@@ -461,6 +503,13 @@ impl Pane {
             self.gradients.insert(n, ng);
         }
         self.show();
+    }
+    
+    fn generate_color_map(&self) -> ColorMap {
+        ColorMap::make(
+            &self.gradients,
+            RGB::from_color(self.default_color.color())
+        )
     }
 }
 
