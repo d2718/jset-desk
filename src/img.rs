@@ -3,6 +3,7 @@ module for generating the image window and getting image size/zoom parameters
 */
 
 use std::cell::RefCell;
+use std::default::Default;
 use std::rc::Rc;
 
 use fltk::{
@@ -21,12 +22,24 @@ use crate::rgb;
 use crate::rgb::RGB;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct ImageParams {
-    xpix: usize,
-    ypix: usize,
-    x: f64,
-    y: f64,
-    width: f64,
+pub struct ImageParams {
+    pub xpix: usize,
+    pub ypix: usize,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+}
+
+impl Default for ImageParams {
+    fn default() -> Self {
+        Self {
+            xpix: 800,
+            ypix: 600,
+            x: -2.0,
+            y: 1.0,
+            width: 3.0,
+        }
+    }
 }
 
 struct Pane {

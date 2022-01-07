@@ -20,6 +20,8 @@ use fltk::{
     window::DoubleWindow,
 };
 
+use crate::iter::IterMap;
+
 const PICKER_ROW_HEIGHT:         i32 = 32;
 const PICKER_LABEL_WIDTH:        i32 = 16;
 const PICKER_SLIDER_WIDTH:       i32 = 256;
@@ -97,6 +99,22 @@ pub fn color_average(dat: &[RGB]) -> RGB {
     let n_float = dat.len() as f32;
     
     RGB::new(rtot/n_float, gtot/n_float, btot/n_float)
+}
+
+pub struct FImageData {
+    w: usize,
+    h: usize,
+    data: Vec<RGB>,
+}
+
+impl FImageData {
+    fn new(width: usize, height: usize, dat: Vec<RGB>) -> FImageData {
+        FImageData { w: width, h: height, data: dat }
+    }
+    
+    fn width(&self)  -> usize { self.w }
+    fn height(&self) -> usize { self.h }
+    fn pixels(&self) -> &[RGB] { &self.data.as_slice() }
 }
 
 /* This function is honestly just used to save typing in the body of
