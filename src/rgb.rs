@@ -549,7 +549,7 @@ impl Pane {
         self.show();
     }
     
-    fn generate_color_map(&self) -> ColorMap {
+    pub fn generate_color_map(&self) -> ColorMap {
         ColorMap::make(
             &self.gradients,
             RGB::from_color(self.default_color.color())

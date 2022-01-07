@@ -9,7 +9,7 @@ use std::rc::Rc;
 use fltk::{
     prelude::*,
     button::RadioRoundButton,
-    enums::{Align, Color},
+    enums::{Align, Color, Event},
     frame::Frame,
     group::{Flex, Pack, Scroll},
     image::RgbImage,
@@ -18,6 +18,7 @@ use fltk::{
     window::DoubleWindow,
 };
 
+use crate::iter;
 use crate::rgb;
 use crate::rgb::RGB;
 
@@ -44,6 +45,7 @@ impl Default for ImageParams {
 
 pub struct Pane {
     win: DoubleWindow,
+    colors: Rc<RefCell<rgb::Pane>>,
     img_frame: Frame,
     width_ipt: IntInput,
     height_ipt: IntInput,
@@ -143,6 +145,7 @@ impl Pane {
         let p = Pane {
             win: w.clone(),
             img_frame: imgf.clone(),
+            colors: rgb::Pane::default(),
             width_ipt: width_pix_ipt.clone(),
             height_ipt: height_pix_ipt.clone(),
             current_params: params,
@@ -174,6 +177,39 @@ impl Pane {
             let p = p.clone();
             move |_| { p.borrow_mut().redraw_image(); }
         });
+        
+        imgf.handle({
+            let p = p.clone();
+            move |f, evt| {
+                if evt != Event::Released { return false; }
+                
+                let mut parms = p.borrow().current_params;
+                
+                let fxpix = parms.xpix as f64;
+                let fypix = parms.ypix as f64;
+                
+                let (px, py) = fltk::app::event_coords();
+                let (px, py) = (px - f.x(), py - f.y());
+                let zoom_factor = p.borrow()
+                    .get_img_zoom_state()
+                    .unwrap() as f64;
+                let x_frac = zoom_factor * (px as f64) / fxpix;
+                let y_frac = zoom_factor * (py as f64) / fypix;
+                let x_frac = x_frac - 0.5;
+                let y_frac = y_frac - 0.5;
+                
+                let height = parms.width * fypix / fxpix;
+                let new_x = parms.x + (x_frac * parms.width);
+                let new_y = parms.y - (y_frac * height);
+                
+                parms.x = new_x;
+                parms.y = new_y;
+                p.borrow_mut().current_params = parms;
+                
+                p.borrow_mut().iter_with_current_parameters_and_update();
+                true
+            }
+        });    
         
         p
     }
@@ -268,39 +304,26 @@ impl Pane {
        
         self.redraw_image();
     }
+    
+    fn get_iter_params(&self) -> iter::IterParams {
+        iter::IterParams::Mandlebrot
+    }
+    
+    pub fn iter_with_current_parameters_and_update(&mut self) {
+        let colormap = self.colors.borrow().generate_color_map();
+        let iterparams = self.get_iter_params();
+        let itermap = iter::make_iter_map(
+            self.current_params,
+            iterparams,
+            colormap.len(),
+            3
+        );
+        let new_fimage = itermap.color(&colormap);
+        self.set_image(new_fimage);
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    
-    #[test]
-    fn make_image_pane() {
-        let a = fltk::app::App::default();
-        let parms = ImageParams {
-            xpix: 400,
-            ypix: 300,
-            x: -2.0,
-            y: 1.0,
-            width: 3.0
-        };
-        let mut p = Pane::new(parms);
-        
-        let (img_w, img_h): (usize, usize) = (400, 300);
-        let mut img_vec: Vec<RGB> = Vec::with_capacity(img_w * img_h);
-        let (img_wf, img_hf) = (img_w as f32, img_h as f32);
-        for y in 0..img_h {
-            let y_frac = (y as f32) / img_hf;
-            let gval = 255.0 * y_frac;
-            for x in 0..img_w {
-                let x_frac = (x as f32) / img_wf;
-                let bval = 255.0 * x_frac;
-                img_vec.push(RGB::new(0.0, gval, bval));
-            }
-        }
-        
-        p.borrow_mut().set_image(img_w, img_h, img_vec);
-        
-        a.run().unwrap();
-    }
 }
