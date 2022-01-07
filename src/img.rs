@@ -54,7 +54,7 @@ pub struct Pane {
     img_zoom_3: RadioRoundButton,
     img_zoom_4: RadioRoundButton,
     image_data: Vec<u8>,
-    rgb_data: Vec<RGB>,
+    frgb_data: rgb::FImageData,
     current_params: ImageParams,
 }
 
@@ -149,7 +149,7 @@ impl Pane {
             zoom_ipt: zoom_amt_ipt.clone(),
             nudge_ipt: nudge_amt_ipt.clone(),
             image_data: Vec::new(),
-            rgb_data: Vec::new(),
+            frgb_data: rgb::FImageData::new(0, 0, Vec::new()),
             img_zoom_1: ab1.clone(),
             img_zoom_2: ab2.clone(),
             img_zoom_3: ab3.clone(),
@@ -186,30 +186,27 @@ impl Pane {
         else { None }
     }
     
-    fn draw_image_native(&self) -> (usize, usize, Vec<u8>) {
-        let width  = self.current_params.xpix;
-        let height = self.current_params.ypix;
+    fn make_image_data_native(&self) -> (usize, usize, Vec<u8>) {
+        let width  = self.frgb_data.width();
+        let height = self.frgb_data.height();
         
         let mut rgba_data: Vec<u8> = Vec::with_capacity(width * height * 4);
-        for y in 0..height {
-            let base_offset = y * width;
-            for x in 0..width {
-                let offs = base_offset + x;
-                for b in self.rgb_data[offs].to_rgba().iter() {
-                    rgba_data.push(*b);
-                }
+        for p in self.frgb_data.pixels().iter() {
+            for b in p.to_rgba().iter() {
+                rgba_data.push(*b);
             }
         }
-        
+      
         (width, height, rgba_data)
     }
     
-    fn draw_image_scaled(&self, chunk: usize) -> (usize, usize, Vec<u8>) {
+    fn make_image_data_scaled(&self, chunk: usize) -> (usize, usize, Vec<u8>) {
         let pixlines = self.current_params.ypix / chunk;
         let pixcols  = self.current_params.xpix / chunk;
         let n_pixels = pixlines * pixcols;
         let mut rgba_data: Vec<u8> = Vec::with_capacity(n_pixels * 4);
         let mut palette: [RGB; 16] = [RGB::new(0.0, 0.0, 0.0); 16];
+        let f_data = self.frgb_data.pixels();
         
         for yi in 0..pixlines {
             let base_offset = yi * self.current_params.xpix * chunk;
@@ -219,7 +216,7 @@ impl Pane {
                 for y in 0..chunk {
                     let po = offs + (self.current_params.xpix * y);
                     for x in 0..chunk {
-                        palette[pp] = self.rgb_data[po+x];
+                        palette[pp] = f_data[po+x];
                         pp += 1;
                     }
                 }
@@ -236,8 +233,8 @@ impl Pane {
         let height = self.current_params.ypix;
         
         let (pixcols, pixlines, rgba_data) = match self.get_img_zoom_state() {
-            Some(1) => self.draw_image_native(),
-            Some(n) => self.draw_image_scaled(n),
+            Some(1) => self.make_image_data_native(),
+            Some(n) => self.make_image_data_scaled(n),
             None => {
                 eprintln!("img::Pane::set_image(): illegal im_zoom_state");
                 return;
@@ -267,7 +264,7 @@ impl Pane {
         self.img_frame.set_size(image.width() as i32, image.height() as i32);
         self.current_params.xpix = image.width();
         self.current_params.ypix = image.height();
-        self.rgb_data = image.to_data();
+        self.frgb_data = image;
        
         self.redraw_image();
     }
