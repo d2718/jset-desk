@@ -2,7 +2,6 @@
 Doing the iteration.
 */
 
-use std::iter::Iterator;
 use std::sync::mpsc;
 use std::thread;
 
@@ -39,10 +38,10 @@ pub struct IterMap {
 }
 
 impl IterMap {
-    pub fn color(&self, &map: ColorMap) -> rgb::FImageData {
-        let mut v: Vec<RGB> = Vec::with_capacity(self.width * self.height);
+    pub fn color(&self, map: &rgb::ColorMap) -> rgb::FImageData {
+        let mut v: Vec<rgb::RGB> = Vec::with_capacity(self.width * self.height);
         for chunk in self.chunks.iter() {
-            for n in chunk.iter() { v.push(map.get(*n)) }
+            for n in chunk.data.iter() { v.push(map.get(*n)) }
         }
         rgb::FImageData::new(self.width, self.height, v)
     }
@@ -79,17 +78,20 @@ fn iterate_chunk<F>(mut chunk: IterChunk, f: F, limit: usize) -> IterChunk
     chunk
 }
 
-fn make_iter_map(
+pub fn make_iter_map(
     img_params: ImageParams,
     iter_params: IterParams,
     iter_limit: usize,
     n_threads: usize,
-) -> Vec::<IterChunk> {
+) -> IterMap {
     let n_chunks = n_threads * 2;
     let chunk_height = img_params.ypix / n_chunks;
     let last_chunk_height = img_params.ypix % n_chunks;
     let img_height: f64 = img_params.width * (img_params.ypix as f64) / (img_params.xpix as f64);
-    let iter_func = mandlebrot_iterator;
+    let iter_func = match iter_params {
+        IterParams::Mandlebrot => mandlebrot_iterator,
+        _ => unimplemented!(),
+    };
     
     let mut to_process: Vec<IterChunk> = Vec::new();
     let mut start_y: usize = 0;
@@ -137,7 +139,7 @@ fn make_iter_map(
                 let txc = tx.clone();
                 thread::spawn(move || {
                     let nic = iterate_chunk(ic, iter_func, iter_limit);
-                    txc.send(nic);
+                    txc.send(nic).unwrap();
                 });
                 active_threads += 1;
             }
@@ -153,7 +155,11 @@ fn make_iter_map(
     
     done_chunks.sort_by_key(|x| x.chunk_order);
     
-    done_chunks
+    IterMap {
+        width: img_params.xpix,
+        height: img_params.ypix,
+        chunks: done_chunks,
+    }
 }
 
 #[cfg(test)]

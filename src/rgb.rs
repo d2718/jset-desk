@@ -20,8 +20,6 @@ use fltk::{
     window::DoubleWindow,
 };
 
-use crate::iter::IterMap;
-
 const PICKER_ROW_HEIGHT:         i32 = 32;
 const PICKER_LABEL_WIDTH:        i32 = 16;
 const PICKER_SLIDER_WIDTH:       i32 = 256;
@@ -83,6 +81,15 @@ impl RGB {
     pub fn black() -> RGB {
         RGB { r:0.0, g:0.0, b:0.0 }
     }
+    
+    pub const BLACK:   RGB = RGB { r: 0.0, g: 0.0, b: 0.0 };
+    pub const WHITE:   RGB = RGB { r: 255.0, g: 255.0, b: 255.0 };
+    pub const RED:     RGB = RGB { r: 255.0, g: 0.0, b: 0.0 };
+    pub const GREEN:   RGB = RGB { r: 0.0, g: 255.0, b: 0.0 };
+    pub const BLUE:    RGB = RGB { r: 0.0, g: 0.0, b: 255.0 };
+    pub const YELLOW:  RGB = RGB { r: 255.0, g: 255.0, b: 0.0 };
+    pub const CYAN:    RGB = RGB { r: 0.0, g: 255.0, b: 255.0 };
+    pub const MAGENTA: RGB = RGB { r: 255.0, g: 0.0, b: 255.0 };
 }
 
 pub fn color_average(dat: &[RGB]) -> RGB {
@@ -108,13 +115,14 @@ pub struct FImageData {
 }
 
 impl FImageData {
-    fn new(width: usize, height: usize, dat: Vec<RGB>) -> FImageData {
+    pub fn new(width: usize, height: usize, dat: Vec<RGB>) -> FImageData {
         FImageData { w: width, h: height, data: dat }
     }
     
-    fn width(&self)  -> usize { self.w }
-    fn height(&self) -> usize { self.h }
-    fn pixels(&self) -> &[RGB] { &self.data.as_slice() }
+    pub fn width(&self)  -> usize { self.w }
+    pub fn height(&self) -> usize { self.h }
+    pub fn pixels(&self) -> &[RGB] { &self.data.as_slice() }
+    pub fn to_data(self) -> Vec<RGB> { self.data }
 }
 
 /* This function is honestly just used to save typing in the body of
@@ -263,7 +271,7 @@ const GRADIENT_TOTAL_WIDTH: i32 = (2 * GRADIENT_BUTTON_SIZE) + GRADIENT_STEPS_WI
 
 impl Gradient {
     /** Instantiate a new `Gradient` element from and to the given colors. */
-    pub fn new(from_col: RGB, to_col: RGB) -> Gradient {
+    pub fn new(from_col: RGB, to_col: RGB, n_steps: usize) -> Gradient {
         let mut rw = Pack::default()
             .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
         rw.set_type(fltk::group::PackType::Horizontal);
@@ -276,7 +284,7 @@ impl Gradient {
         
         let mut st = ValueInput::default()
             .with_size(GRADIENT_STEPS_WIDTH, GRADIENT_BUTTON_SIZE);
-        st.set_value(256.0);
+        st.set_value(n_steps as f64);
         st.set_minimum(0.0);
         st.set_tooltip("number of steps");
         
@@ -333,7 +341,7 @@ impl Gradient {
 impl Default for Gradient {
     /// A `Default` `Gradient` goes from black to black.
     fn default() -> Gradient {
-        Gradient::new(RGB::black(), RGB::black())
+        Gradient::new(RGB::black(), RGB::black(), 256)
     }
 }
 
@@ -377,6 +385,8 @@ impl ColorMap {
             Some(c) => *c,
         }
     }
+    
+    pub fn len(&self) -> usize { self.data.len() }
 }
 
 /**
@@ -523,7 +533,7 @@ impl Pane {
                 None => RGB::black(),
                 Some(lg) => lg.get_to(),
             };
-            let new_g = Gradient::new(new_from, new_to);
+            let new_g = Gradient::new(new_from, new_to, 256);
             self.gradients.push(new_g);
         } else {
             let new_from = if n == 0 {
@@ -533,7 +543,7 @@ impl Pane {
             };
             let new_to = self.gradients[n].get_from();
             
-            let ng = Gradient::new(new_from, new_to);
+            let ng = Gradient::new(new_from, new_to, 256);
             self.gradients.insert(n, ng);
         }
         self.show();

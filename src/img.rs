@@ -42,7 +42,7 @@ impl Default for ImageParams {
     }
 }
 
-struct Pane {
+pub struct Pane {
     win: DoubleWindow,
     img_frame: Frame,
     width_ipt: IntInput,
@@ -159,19 +159,19 @@ impl Pane {
         let p = Rc::new(RefCell::new(p));
         
         ab1.set_callback({
-            let mut p = p.clone();
+            let p = p.clone();
             move |_| { p.borrow_mut().redraw_image(); }
         });
         ab2.set_callback({
-            let mut p = p.clone();
+            let p = p.clone();
             move |_| { p.borrow_mut().redraw_image(); }
         });
         ab3.set_callback({
-            let mut p = p.clone();
+            let p = p.clone();
             move |_| { p.borrow_mut().redraw_image(); }
         });
         ab4.set_callback({
-            let mut p = p.clone();
+            let p = p.clone();
             move |_| { p.borrow_mut().redraw_image(); }
         });
         
@@ -186,31 +186,38 @@ impl Pane {
         else { None }
     }
     
-    pub fn redraw_image(&mut self) {
+    fn draw_image_native(&self) -> (usize, usize, Vec<u8>) {
         let width  = self.current_params.xpix;
         let height = self.current_params.ypix;
         
-        let chunk = match self.get_img_zoom_state() {
-            Some(n) => n,
-            None => {
-                eprintln!("img::Pane::set_image(): illegal im_zoom_state");
-                return;
-            },
-        };
+        let mut rgba_data: Vec<u8> = Vec::with_capacity(width * height * 4);
+        for y in 0..height {
+            let base_offset = y * width;
+            for x in 0..width {
+                let offs = base_offset + x;
+                for b in self.rgb_data[offs].to_rgba().iter() {
+                    rgba_data.push(*b);
+                }
+            }
+        }
         
-        let pixlines = height / chunk;
-        let pixcols  = width / chunk;
+        (width, height, rgba_data)
+    }
+    
+    fn draw_image_scaled(&self, chunk: usize) -> (usize, usize, Vec<u8>) {
+        let pixlines = self.current_params.ypix / chunk;
+        let pixcols  = self.current_params.xpix / chunk;
         let n_pixels = pixlines * pixcols;
         let mut rgba_data: Vec<u8> = Vec::with_capacity(n_pixels * 4);
         let mut palette: [RGB; 16] = [RGB::new(0.0, 0.0, 0.0); 16];
         
         for yi in 0..pixlines {
-            let base_offset = yi * width * chunk;
+            let base_offset = yi * self.current_params.xpix * chunk;
             for xi in 0..pixcols {
                 let offs = base_offset + (xi * chunk);
                 let mut pp = 0usize;
                 for y in 0..chunk {
-                    let po = offs + (width * y);
+                    let po = offs + (self.current_params.xpix * y);
                     for x in 0..chunk {
                         palette[pp] = self.rgb_data[po+x];
                         pp += 1;
@@ -220,7 +227,23 @@ impl Pane {
                 for b in avg_p.to_rgba().iter() { rgba_data.push(*b); }
             }
         }
-
+        
+        (pixcols, pixlines, rgba_data)
+    }
+    
+    pub fn redraw_image(&mut self) {
+        let width  = self.current_params.xpix;
+        let height = self.current_params.ypix;
+        
+        let (pixcols, pixlines, rgba_data) = match self.get_img_zoom_state() {
+            Some(1) => self.draw_image_native(),
+            Some(n) => self.draw_image_scaled(n),
+            None => {
+                eprintln!("img::Pane::set_image(): illegal im_zoom_state");
+                return;
+            },
+        };
+        
         self.image_data = rgba_data;
         let frame_image = unsafe {
             RgbImage::from_data(
@@ -239,15 +262,13 @@ impl Pane {
     
     pub fn set_image(
         &mut self,
-        width: usize,
-        height: usize,
-        pixvals: Vec<RGB>
+        image: rgb::FImageData,
     ) {
-        self.rgb_data = pixvals;
-        self.img_frame.set_size(width as i32, height as i32);
-        self.current_params.xpix = width;
-        self.current_params.ypix = height;
-        
+        self.img_frame.set_size(image.width() as i32, image.height() as i32);
+        self.current_params.xpix = image.width();
+        self.current_params.ypix = image.height();
+        self.rgb_data = image.to_data();
+       
         self.redraw_image();
     }
 }
