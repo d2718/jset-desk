@@ -1,6 +1,7 @@
 /*!
 testing the iteration->coloration->display pipeline
 */
+use fltk::enums::{Event, Key};
 
 use jset_desk::*;
 
@@ -8,7 +9,7 @@ fn main() {
     let a = fltk::app::App::default();
     
     let mut p = img::Pane::new(img::ImageParams::default());
-    p.borrow_mut().iter_with_current_parameters_and_update();
+    p.borrow_mut().reiterate();
     
     a.run().unwrap();
 }

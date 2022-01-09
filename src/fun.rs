@@ -158,7 +158,7 @@ impl Pane {
             .with_pos(0, 4 * ROW_HEIGHT);
         let _ = Frame::default().with_size(ROW_WIDTH, ROW_HEIGHT)
             .with_label("Polynomial Coefficients").with_pos(0, 0);
-        let mut c = Coef::new(&Coef::term_label(0), 1.0, 0.0);
+        let mut c = Coef::new(&Coef::term_label(0), 0.7, 0.63);
         c.get_mut_row().set_pos(0, ROW_HEIGHT);
         cs.push(c);
         let mut c = Coef::new(&Coef::term_label(1), 0.0, 0.0);

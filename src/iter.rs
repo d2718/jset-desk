@@ -20,6 +20,7 @@ pub enum IterParams {
 
 struct IterChunk {
     chunk_order: usize,
+    params: IterParams,
     width: usize,
     height: usize,
     x: f64,
@@ -57,12 +58,50 @@ fn mandlebrot_iterator(c: Cx, limit: usize) -> usize {
     limit
 }
 
-fn iterate_chunk<F>(mut chunk: IterChunk, f: F, limit: usize) -> IterChunk
-    where F: Fn(Cx, usize) -> usize
-{
+fn pseudomandle_maker(a: Cx, b: Cx) -> Box<dyn Fn(Cx, usize) -> usize> {
+    let f = move |c, limit| {
+        let mut z = Cx { re: 0.0, im: 0.0 };
+        let pseudo_c = b * c;
+        
+        for n in 0..limit {
+            z = (a * z * z) + pseudo_c;
+            if z.sqmod() > SQ_MOD_LIMIT { return n; }
+        }
+        limit
+    };
+    Box::new(f)
+}
+
+fn polyiter_maker(v: Vec<Cx>) -> Box<dyn Fn(Cx, usize) -> usize> {
+    let deg = v.len() - 1;
+    let f = move |c, limit| {
+        let mut z = c;
+        for n in 0..limit {
+            let mut tot = Cx { re: 0.0, im: 0.0 };
+            let mut w = Cx { re: 1.0, im: 0.0 };
+            for a in v[0..deg].iter() {
+                tot = tot + (*a) * w;
+                w = w * z;
+            }
+            tot = unsafe { tot + (*v.get_unchecked(deg) * w) };
+            z = tot;
+            if z.sqmod() > SQ_MOD_LIMIT { return n; }
+        }
+        limit
+    };
+    
+    Box::new(f)
+}
+
+fn iterate_chunk(mut chunk: IterChunk, limit: usize) -> IterChunk {
     chunk.data = Vec::with_capacity(chunk.width * chunk.n_rows);
     let f_width  = chunk.width as f64;
     let f_height = chunk.height as f64;
+    let f = match chunk.params {
+        IterParams::Mandlebrot => Box::new(mandlebrot_iterator),
+        IterParams::PseudoMandlebrot(a, b) => pseudomandle_maker(a, b),
+        IterParams::Polynomial(ref v) => polyiter_maker(v.clone()),
+    };
     
     for yp in chunk.y_start..(chunk.y_start + chunk.n_rows) {
         let y_frac = (yp as f64) / f_height;
@@ -88,16 +127,13 @@ pub fn make_iter_map(
     let chunk_height = img_params.ypix / n_chunks;
     let last_chunk_height = img_params.ypix % n_chunks;
     let img_height: f64 = img_params.width * (img_params.ypix as f64) / (img_params.xpix as f64);
-    let iter_func = match iter_params {
-        IterParams::Mandlebrot => mandlebrot_iterator,
-        _ => unimplemented!(),
-    };
     
     let mut to_process: Vec<IterChunk> = Vec::new();
     let mut start_y: usize = 0;
     for n in 0..n_chunks {
         let ic = IterChunk {
             chunk_order: n,
+            params: iter_params.clone(),
             width: img_params.xpix,
             height: img_params.ypix,
             x: img_params.x,
@@ -114,6 +150,7 @@ pub fn make_iter_map(
     if last_chunk_height > 0 {
         let ic = IterChunk {
             chunk_order: n_chunks,
+            params: iter_params.clone(),
             width: img_params.xpix,
             height: img_params.ypix,
             x: img_params.x,
@@ -138,7 +175,7 @@ pub fn make_iter_map(
                 println!("chunk {} ->", ic.chunk_order);
                 let txc = tx.clone();
                 thread::spawn(move || {
-                    let nic = iterate_chunk(ic, iter_func, iter_limit);
+                    let nic = iterate_chunk(ic, iter_limit);
                     txc.send(nic).unwrap();
                 });
                 active_threads += 1;

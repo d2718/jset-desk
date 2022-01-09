@@ -4,20 +4,24 @@ module for generating the image window and getting image size/zoom parameters
 
 use std::cell::RefCell;
 use std::default::Default;
+use std::io::{BufWriter, Write};
+use std::path::Path;
 use std::rc::Rc;
+use std::fs::File;
 
 use fltk::{
     prelude::*,
-    button::RadioRoundButton,
-    enums::{Align, Color, Event},
+    button::{Button, RadioRoundButton},
+    enums::{Align, Color, Event, Key},
     frame::Frame,
-    group::{Flex, Pack, Scroll},
+    group::{Flex, Pack, PackType, Scroll},
     image::RgbImage,
     input::IntInput,
     valuator::ValueInput,
     window::DoubleWindow,
 };
 
+use crate::fun;
 use crate::iter;
 use crate::rgb;
 use crate::rgb::RGB;
@@ -46,11 +50,12 @@ impl Default for ImageParams {
 pub struct Pane {
     win: DoubleWindow,
     colors: Rc<RefCell<rgb::Pane>>,
+    fun_pane: fun::Pane,
     img_frame: Frame,
     width_ipt: IntInput,
     height_ipt: IntInput,
     zoom_ipt: ValueInput,
-    nudge_ipt: IntInput,
+    nudge_ipt: ValueInput,
     img_zoom_1: RadioRoundButton,
     img_zoom_2: RadioRoundButton,
     img_zoom_3: RadioRoundButton,
@@ -60,20 +65,30 @@ pub struct Pane {
     current_params: ImageParams,
 }
 
-const ROW_HEIGHT: i32 = 32;
+const ROW_HEIGHT: i32 = 24;
 const CTRL_COLUMN_WIDTH: i32 = 72;
-const CTRL_COLUMN_HEIGHT: i32 = ROW_HEIGHT * 10;
+const CTRL_COLUMN_HEIGHT: i32 = ROW_HEIGHT * 17;
+const HALF_BUTTON: i32 = CTRL_COLUMN_WIDTH / 2;
+const WINDOW_SIZE_KLUDGE: i32 = 24;
+
+const MIN_IMAGE_DIMENSION: usize = 16;
 
 impl Pane {
     pub fn new(params: ImageParams) -> Rc<RefCell<Pane>> {
         let (fxpix, fypix) = (params.xpix as i32, params.ypix as i32);
         let mut w = DoubleWindow::default().with_label("JSet-Desktop")
-            .with_size(16, 16);
+            .with_size(
+                fxpix + CTRL_COLUMN_WIDTH + WINDOW_SIZE_KLUDGE,
+                fypix + WINDOW_SIZE_KLUDGE
+            );
         w.set_border(true);
         w.make_resizable(true);
         
         let scroll_region = Scroll::default().with_pos(0, 0)
-            .with_size(fxpix + CTRL_COLUMN_WIDTH, fypix)
+            .with_size(
+                fxpix + CTRL_COLUMN_WIDTH + WINDOW_SIZE_KLUDGE,
+                fypix + WINDOW_SIZE_KLUDGE
+            )
             .with_type(fltk::group::ScrollType::BothAlways);
         let mut imgf = Frame::default().with_pos(CTRL_COLUMN_WIDTH, 0)
             .with_size(fxpix, fypix);
@@ -92,10 +107,31 @@ impl Pane {
         let _ = Frame::default().with_label("zoom").with_size(0, ROW_HEIGHT);
         let mut zoom_amt_ipt = ValueInput::default().with_size(0, ROW_HEIGHT);
         zoom_amt_ipt.set_value(2.0);
+        let zoom_butt_pack = Pack::default().with_size(0, ROW_HEIGHT)
+            .with_type(PackType::Horizontal);
+        let mut zoom_in_butt = Button::default().with_label("@+")
+            .with_size(HALF_BUTTON, 0);
+        let mut zoom_out_butt = Button::default().with_label("@line")
+            .with_size(HALF_BUTTON, 0);
+        zoom_butt_pack.end();
         
         let _ = Frame::default().with_label("nudge").with_size(0, ROW_HEIGHT);
-        let mut nudge_amt_ipt = IntInput::default().with_size(0, ROW_HEIGHT);
-        nudge_amt_ipt.set_value(&(10.to_string()));
+        let mut nudge_amt_ipt = ValueInput::default().with_size(0, ROW_HEIGHT);
+        nudge_amt_ipt.set_value(10.0);
+        let nudge_top_pack = Pack::default().with_size(0, ROW_HEIGHT)
+            .with_type(PackType::Horizontal);
+        let mut nudge_up_butt = Button::default().with_label("@#00090->")
+            .with_size(HALF_BUTTON, 0);
+        let mut nudge_right_butt = Button::default().with_label("@->")
+            .with_size(HALF_BUTTON, 0);
+        nudge_top_pack.end();
+        let mut nudge_bottom_pack = Pack::default().with_size(0, ROW_HEIGHT)
+            .with_type(PackType::Horizontal);
+        let mut nudge_left_butt = Button::default().with_label("@<-")
+            .with_size(HALF_BUTTON, 0);
+        let mut nudge_down_butt = Button::default().with_label("@#00090<-")
+            .with_size(HALF_BUTTON, 0);
+        nudge_bottom_pack.end();
         
         let _ = Frame::default().with_label("image").with_size(0, ROW_HEIGHT);
         let zoom_flex = Flex::default().column().with_align(Align::Center)
@@ -107,45 +143,22 @@ impl Pane {
         let mut ab4 = RadioRoundButton::default().with_label("4:1");
         zoom_flex.end();
         
+        let mut save_butt = Button::default().with_label("save")
+            .with_size(0, ROW_HEIGHT);
+        
         ctrl_col.end();
         scroll_region.end();
         w.end();
         w.show();
+        
         let scroll_size = scroll_region.scrollbar_size();
         println!("scrollbar size: {}", scroll_size);
-        w.set_size(fxpix + CTRL_COLUMN_WIDTH + scroll_size, fypix + scroll_size);
-        w.redraw();
-        
-        width_pix_ipt.set_callback({
-            let mut f = imgf.clone();
-            move |ipt| {
-                let w: u16 = match ipt.value().parse() {
-                    Ok(n) => n,
-                    Err(_) => { println!("Error parsing new image frame width."); return },
-                };
-                let h = f.h();
-                f.set_size(w as i32, h);
-                println!("Set image frame size ({}, {})", w, h);
-            }
-        });
-        
-        height_pix_ipt.set_callback({
-            let mut f = imgf.clone();
-            move |ipt| {
-                let h: u16 = match ipt.value().parse() {
-                    Ok(n) => n,
-                    Err(_) => { println!("Error parsing new image frame height."); return },
-                };
-                let w = f.w();
-                f.set_size(w, h as i32);
-                println!("Set image frame size ({}, {})", w, h);
-            }
-        });
         
         let p = Pane {
             win: w.clone(),
             img_frame: imgf.clone(),
             colors: rgb::Pane::default(),
+            fun_pane: fun::Pane::new(),
             width_ipt: width_pix_ipt.clone(),
             height_ipt: height_pix_ipt.clone(),
             current_params: params,
@@ -161,21 +174,22 @@ impl Pane {
         
         let p = Rc::new(RefCell::new(p));
         
-        ab1.set_callback({
+        w.handle({
             let p = p.clone();
-            move |_| { p.borrow_mut().redraw_image(); }
-        });
-        ab2.set_callback({
-            let p = p.clone();
-            move |_| { p.borrow_mut().redraw_image(); }
-        });
-        ab3.set_callback({
-            let p = p.clone();
-            move |_| { p.borrow_mut().redraw_image(); }
-        });
-        ab4.set_callback({
-            let p = p.clone();
-            move |_| { p.borrow_mut().redraw_image(); }
+            move |_, evt| {
+                match evt {
+                    Event::KeyDown => {
+                        println!("Handling event! {:?}", &evt);
+                        if fltk::app::event_key() == Key::Enter {
+                            p.borrow_mut().reiterate();
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    _ => false,
+                }
+            }
         });
         
         imgf.handle({
@@ -206,12 +220,113 @@ impl Pane {
                 parms.y = new_y;
                 p.borrow_mut().current_params = parms;
                 
-                p.borrow_mut().iter_with_current_parameters_and_update();
+                p.borrow_mut().reiterate();
                 true
             }
-        });    
+        });
+        
+        nudge_up_butt.set_callback({
+            let p = p.clone();
+            move |_| {
+                let mut p = p.borrow_mut();
+                let d = p.get_nudge_distance();
+                p.current_params.y = p.current_params.y + d;
+                p.reiterate();
+            }
+        });
+        nudge_down_butt.set_callback({
+            let p = p.clone();
+            move |_| {
+                let mut p = p.borrow_mut();
+                let d = p.get_nudge_distance();
+                p.current_params.y = p.current_params.y - d;
+                p.reiterate();
+            }
+        });
+        nudge_left_butt.set_callback({
+            let p = p.clone();
+            move |_| {
+                let mut p = p.borrow_mut();
+                let d = p.get_nudge_distance();
+                p.current_params.x = p.current_params.x - d;
+                p.reiterate();
+            }
+        });
+        nudge_right_butt.set_callback({
+            let p = p.clone();
+            move |_| {
+                let mut p = p.borrow_mut();
+                let d = p.get_nudge_distance();
+                p.current_params.x = p.current_params.x + d;
+                p.reiterate();
+            }
+        });
+        
+        zoom_in_butt.set_callback({
+            let p = p.clone();
+            let zipt = zoom_amt_ipt.clone();
+            move |_| {
+                let mut p = p.borrow_mut();
+                let mut params = p.current_params;
+                let z = zipt.value();
+                let z_factor =  0.5 * (1.0 - (1.0 / z));
+                let height = params.width * (params.ypix as f64) / (params.xpix as f64);
+                params.x = params.x + (params.width * z_factor);
+                params.y = params.y - (height * z_factor);
+                params.width = params.width / z;
+                p.current_params = params;
+                p.reiterate();
+            }
+        });
+        
+        zoom_out_butt.set_callback({
+            let p = p.clone();
+            let zipt = zoom_amt_ipt.clone();
+            move |_| {
+                let mut p = p.borrow_mut();
+                let mut params = p.current_params;
+                let z = zipt.value();
+                let z_factor = 0.5 * (z - 1.0);
+                let height = params.width * (params.ypix as f64) / (params.xpix as f64);
+                params.x = params.x - (params.width * z_factor);
+                params.y = params.y + (height * z_factor);
+                params.width = params.width * z;
+                p.current_params = params;
+                p.reiterate();
+            }
+        });
+
+
+        ab1.set_callback({
+            let p = p.clone();
+            move |_| { p.borrow_mut().redraw_image(); }
+        });
+        ab2.set_callback({
+            let p = p.clone();
+            move |_| { p.borrow_mut().redraw_image(); }
+        });
+        ab3.set_callback({
+            let p = p.clone();
+            move |_| { p.borrow_mut().redraw_image(); }
+        });
+        ab4.set_callback({
+            let p = p.clone();
+            move |_| { p.borrow_mut().redraw_image(); }
+        });
+        
+        save_butt.set_callback({
+            let p = p.clone();
+            move |_| { p.borrow().save_image_data("image.png"); }
+        });
         
         p
+    }
+    
+    fn get_nudge_distance(&self) -> f64 {
+        let nudge_pix = self.nudge_ipt.value();
+        let p = self.current_params;
+        let d = p.width * nudge_pix / (p.xpix as f64);
+        d
     }
     
     fn get_img_zoom_state(&self) -> Option<usize> {
@@ -226,21 +341,21 @@ impl Pane {
         let width  = self.frgb_data.width();
         let height = self.frgb_data.height();
         
-        let mut rgba_data: Vec<u8> = Vec::with_capacity(width * height * 4);
+        let mut rgb8_data: Vec<u8> = Vec::with_capacity(width * height * 3);
         for p in self.frgb_data.pixels().iter() {
-            for b in p.to_rgba().iter() {
-                rgba_data.push(*b);
+            for b in p.to_rgb8().iter() {
+                rgb8_data.push(*b);
             }
         }
       
-        (width, height, rgba_data)
+        (width, height, rgb8_data)
     }
     
     fn make_image_data_scaled(&self, chunk: usize) -> (usize, usize, Vec<u8>) {
         let pixlines = self.current_params.ypix / chunk;
         let pixcols  = self.current_params.xpix / chunk;
         let n_pixels = pixlines * pixcols;
-        let mut rgba_data: Vec<u8> = Vec::with_capacity(n_pixels * 4);
+        let mut rgb8_data: Vec<u8> = Vec::with_capacity(n_pixels * 3);
         let mut palette: [RGB; 16] = [RGB::new(0.0, 0.0, 0.0); 16];
         let f_data = self.frgb_data.pixels();
         
@@ -257,18 +372,18 @@ impl Pane {
                     }
                 }
                 let avg_p = rgb::color_average(&palette[0..pp]);
-                for b in avg_p.to_rgba().iter() { rgba_data.push(*b); }
+                for b in avg_p.to_rgb8().iter() { rgb8_data.push(*b); }
             }
         }
         
-        (pixcols, pixlines, rgba_data)
+        (pixcols, pixlines, rgb8_data)
     }
     
     pub fn redraw_image(&mut self) {
         let width  = self.current_params.xpix;
         let height = self.current_params.ypix;
         
-        let (pixcols, pixlines, rgba_data) = match self.get_img_zoom_state() {
+        let (pixcols, pixlines, rgb8_data) = match self.get_img_zoom_state() {
             Some(1) => self.make_image_data_native(),
             Some(n) => self.make_image_data_scaled(n),
             None => {
@@ -277,13 +392,13 @@ impl Pane {
             },
         };
         
-        self.image_data = rgba_data;
+        self.image_data = rgb8_data;
         let frame_image = unsafe {
             RgbImage::from_data(
                 &self.image_data,
                 pixcols as i32,
                 pixlines as i32,
-                fltk::enums::ColorDepth::Rgba8
+                fltk::enums::ColorDepth::Rgb8
             ).unwrap()
         };
         
@@ -306,12 +421,31 @@ impl Pane {
     }
     
     fn get_iter_params(&self) -> iter::IterParams {
-        iter::IterParams::Mandlebrot
+        self.fun_pane.get_params()
     }
     
-    pub fn iter_with_current_parameters_and_update(&mut self) {
+    pub fn reiterate(&mut self) {
+        match self.width_ipt.value().parse::<usize>() {
+            Ok(n) => if n < MIN_IMAGE_DIMENSION {
+                eprintln!("A width of {} pixels is just too small.", n);
+            } else {
+                self.current_params.xpix = n;
+            },
+            Err(e) => { eprintln!("Error parsing new image width: {}", &e); }
+        }
+        match self.height_ipt.value().parse::<usize>() {
+            Ok(n) => if n < MIN_IMAGE_DIMENSION {
+                eprintln!("A height of {} pixels is just too small.", n);
+            } else {
+                self.current_params.ypix = n;
+            },
+            Err(e) => { eprintln!("Error parsing new image height: {}", &e); }
+        }
+        
+        
         let colormap = self.colors.borrow().generate_color_map();
         let iterparams = self.get_iter_params();
+        println!("IterParams: {:?}", &iterparams);
         let itermap = iter::make_iter_map(
             self.current_params,
             iterparams,
@@ -320,6 +454,18 @@ impl Pane {
         );
         let new_fimage = itermap.color(&colormap);
         self.set_image(new_fimage);
+    }
+    
+    pub fn save_image_data(&self, filename: &str) {
+        let file = File::create("image.ppm").unwrap();
+        let mut w = BufWriter::new(file);
+        write!(&mut w, "P6 {} {} {}\n",
+            self.current_params.xpix,
+            self.current_params.ypix,
+            255
+        ).unwrap();
+        w.write_all(&self.image_data);
+        w.flush();
     }
 }
 

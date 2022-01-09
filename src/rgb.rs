@@ -77,6 +77,14 @@ impl RGB {
         [rbyte, gbyte, bbyte, 0xFF]
     }
     
+    pub fn to_rgb8(&self) -> [u8; 3] {
+        let rbyte = self.r as u8;
+        let gbyte = self.g as u8;
+        let bbyte = self.b as u8;
+        
+        [rbyte, gbyte, bbyte]
+    }
+    
     /** The default color */
     pub fn black() -> RGB {
         RGB { r:0.0, g:0.0, b:0.0 }
