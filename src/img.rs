@@ -4,10 +4,11 @@ module for generating the image window and getting image size/zoom parameters
 
 use std::cell::RefCell;
 use std::default::Default;
+use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::rc::Rc;
-use std::fs::File;
+use std::process::{Command, Stdio};
 
 use fltk::{
     prelude::*,
@@ -316,7 +317,7 @@ impl Pane {
         
         save_butt.set_callback({
             let p = p.clone();
-            move |_| { p.borrow().save_image_data("image.png"); }
+            move |_| { p.borrow().save_image_data(); }
         });
         
         p
@@ -456,16 +457,49 @@ impl Pane {
         self.set_image(new_fimage);
     }
     
-    pub fn save_image_data(&self, filename: &str) {
-        let file = File::create("image.ppm").unwrap();
-        let mut w = BufWriter::new(file);
-        write!(&mut w, "P6 {} {} {}\n",
-            self.current_params.xpix,
-            self.current_params.ypix,
-            255
-        ).unwrap();
-        w.write_all(&self.image_data);
-        w.flush();
+    pub fn save_image_data(&self) -> std::io::Result<()> {
+        let filename = String::from("image.png");
+        
+        match Command::new("convert").arg("-version").output() {
+            Ok(_) => {
+                let mut cmd = Command::new("convert")
+                    .args(["-", "-define", "png:compression-filter=2",
+                            "-define", "png:compression-level=9",
+                            "-define", "png:compression-strategy=1",
+                            &filename])
+                    .stdin(Stdio::piped())
+                    .spawn()?;
+                let mut cmd_in = cmd.stdin.as_mut().unwrap();
+                write!(&mut cmd_in, "P6 {} {} 255\n",
+                    self.current_params.xpix,
+                    self.current_params.ypix,
+                )?;
+                cmd_in.write_all(&self.image_data)?;
+                cmd.wait().unwrap();
+            },
+            Err(_) => {
+                let file = File::create(&filename)?;
+                let mut w = BufWriter::new(file);
+                write!(&mut w, "P6 {} {} 255\n",
+                    self.current_params.xpix,
+                    self.current_params.ypix,
+                )?;
+                w.write_all(&self.image_data)?;
+                w.flush()?;
+            },
+        }
+        
+        Ok(())
+        
+        //~ let file = File::create("image.ppm").unwrap();
+        //~ let mut w = BufWriter::new(file);
+        //~ write!(&mut w, "P6 {} {} {}\n",
+            //~ self.current_params.xpix,
+            //~ self.current_params.ypix,
+            //~ 255
+        //~ ).unwrap();
+        //~ w.write_all(&self.image_data);
+        //~ w.flush();
     }
 }
 
