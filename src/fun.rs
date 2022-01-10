@@ -8,7 +8,7 @@ use std::rc::Rc;
 use fltk::{
     prelude::*,
     button::Button,
-    enums::{Align, Font},
+    enums::{Align, Event, Font, Key},
     frame::Frame,
     group::Pack,
     menu::Choice,
@@ -114,7 +114,7 @@ impl Coef {
     }
 }
  
-const DEFAULT_PANE_HEIGHT: i32 = ROW_HEIGHT * 11;
+const DEFAULT_PANE_HEIGHT: i32 = ROW_HEIGHT * 12;
 const SELECTOR_WIDTH: i32 = 192;
  
 pub struct Pane {
@@ -128,16 +128,20 @@ impl Pane {
     pub fn new() -> Pane {
         let mut w = DoubleWindow::default().with_label("Iterator Options")
             .with_size(ROW_WIDTH, DEFAULT_PANE_HEIGHT);
+        w.set_border(false);
+        
+        let _lab = Frame::default().with_label("Iterator Options")
+            .with_size(ROW_WIDTH, ROW_HEIGHT).with_pos(0, 0);
         
         let mut sel = Choice::default().with_label("Iterator")
             .with_size(SELECTOR_WIDTH, ROW_HEIGHT)
-            .with_pos(ROW_WIDTH - SELECTOR_WIDTH, 0);
+            .with_pos(ROW_WIDTH - SELECTOR_WIDTH, ROW_HEIGHT);
         sel.add_choice("Mandlebrot|Pseudo-Mandlebrot|Polynomial");
         sel.set_value(0);
         
         let mut pw = DoubleWindow::default()
             .with_size(ROW_WIDTH, 3 * ROW_HEIGHT)
-            .with_pos(0, ROW_HEIGHT);
+            .with_pos(0, 2 * ROW_HEIGHT);
         let mut pw_label = Frame::default().with_size(ROW_WIDTH, ROW_HEIGHT)
             .with_pos(0, 0).with_label("az^2 + bc");
         pw_label.set_label_font(MATH_FONT);
@@ -152,7 +156,7 @@ impl Pane {
         
         let mut pyw = DoubleWindow::default()
             .with_size(ROW_WIDTH, 7 * ROW_HEIGHT)
-            .with_pos(0, 4 * ROW_HEIGHT);
+            .with_pos(0, 5 * ROW_HEIGHT);
         let _ = Frame::default().with_size(ROW_WIDTH, ROW_HEIGHT)
             .with_label("Polynomial Coefficients").with_pos(0, 0);
         let mut c = Coef::new(&Coef::term_label(0), 0.7, 0.63);
@@ -235,6 +239,37 @@ impl Pane {
         
         w.end();
         w.show();
+        
+        w.handle({
+            let (mut wx, mut wy) : (i32, i32) = (w.x(), w.y());
+            let (mut x, mut y)   : (i32, i32) = (0, 0);
+            move |w, evt| {
+                match evt {
+                    Event::Push => {
+                        wx = w.x(); wy = w.y();
+                        x = fltk::app::event_x(); y = fltk::app::event_y();
+                        true
+                    },
+                    Event::Drag => {
+                        let dx = fltk::app::event_x() - x;
+                        let dy = fltk::app::event_y() - y;
+                        wx = wx + dx;
+                        wy = wy + dy;
+                        w.set_pos(wx, wy);
+                        true
+                    },
+                    Event::KeyDown => {
+                        if fltk::app::event_key() == Key::Escape {
+                            // pretend like we handled it
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    _ => false,
+                }
+            }
+        });
         
         let p = Pane {
             selector: sel.clone(),

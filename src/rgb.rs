@@ -13,9 +13,8 @@ use std::rc::Rc;
 use fltk::{
     prelude::*,
     button::Button,
-    enums::{Align, Key, Shortcut},
+    enums::{Align, Event, Key, Shortcut},
     frame::Frame,
-    group::Pack,
     valuator::{HorNiceSlider, ValueInput},
     window::DoubleWindow,
 };
@@ -267,9 +266,9 @@ Instantiates and wraps a UI element (rather, a collection of elements--a
 color, the "to" color, and the number of steps between them are all editable.
 */
 pub struct Gradient {
-    row: Pack,
-    from: Button,
-    to: Button,
+    row:   DoubleWindow,
+    from:  Button,
+    to:    Button,
     steps: ValueInput,
 }
 
@@ -283,28 +282,29 @@ const GRADIENT_TOTAL_WIDTH: i32 = (2 * GRADIENT_BUTTON_SIZE) + GRADIENT_STEPS_WI
 impl Gradient {
     /** Instantiate a new `Gradient` element from and to the given colors. */
     pub fn new(from_col: RGB, to_col: RGB, n_steps: usize) -> Gradient {
-        let mut rw = Pack::default()
+        let mut rw = DoubleWindow::default()
             .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
-        rw.set_type(fltk::group::PackType::Horizontal);
-        rw.end();
         
         let mut fr = Button::default()
-            .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
+            .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
+            .with_pos(0, 0);
         fr.set_color(from_col.to_color());
         fr.set_tooltip("start color");
         
         let mut st = ValueInput::default()
-            .with_size(GRADIENT_STEPS_WIDTH, GRADIENT_BUTTON_SIZE);
+            .with_size(GRADIENT_STEPS_WIDTH, GRADIENT_BUTTON_SIZE)
+            .with_pos(GRADIENT_BUTTON_SIZE, 0);
         st.set_value(n_steps as f64);
         st.set_minimum(0.0);
         st.set_tooltip("number of steps");
         
         let mut t  = Button::default()
-            .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
+            .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
+            .with_pos(GRADIENT_BUTTON_SIZE + GRADIENT_STEPS_WIDTH, 0);
         t.set_color(to_col.to_color());
         t.set_tooltip("end color");
         
-        rw.add(&fr); rw.add(&st); rw.add(&t);
+        rw.end();
         
         fr.set_callback(
             move |b| {
@@ -335,9 +335,14 @@ impl Gradient {
     
     /// Set the position of the element in the containing window.
     pub fn set_pos(&mut self, x: i32, y: i32) { self.row.set_pos(x, y); }
+    /// Show the element.
+    pub fn show(&mut self) {
+        self.row.set_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
+        self.row.show();
+    }
     
     /// Get a reference to the UI element for adding to `Window`s.
-    pub fn get_row(&self) -> &Pack { &self.row }
+    pub fn get_row(&self) -> &DoubleWindow { &self.row }
     
     /// Get the starting color.
     pub fn get_from(&self) -> RGB { RGB::from_color(self.from.color()) }
@@ -430,7 +435,8 @@ impl Pane {
         def_c.set_tooltip("set default color");
         
         let mut w = DoubleWindow::default().with_label("Color Map")
-            .with_size(PANE_WIDTH, 3 * GRADIENT_BUTTON_SIZE);
+            .with_size(PANE_WIDTH, 4 * GRADIENT_BUTTON_SIZE);
+        w.set_border(false);
         w.end();
         w.show();
         
@@ -442,7 +448,7 @@ impl Pane {
         });
         
         let p = Rc::new(RefCell::new(Pane {
-            win: w,
+            win: w.clone(),
             gradients: Vec::new(),
             default_color: def_c,
             me: None,
@@ -450,7 +456,52 @@ impl Pane {
         
         p.borrow_mut().me = Some(p.clone());
         
-        p.clone()
+        /*
+        w.handle({
+            let p = p.clone();
+            move |_, evt| {
+                if evt != Event::Move {
+                    println!("{:?}", &evt);
+                    return false;
+                }
+                p.borrow_mut().show();
+                true
+            }
+        });
+        */
+        
+        w.handle({
+            let (mut wx, mut wy) : (i32, i32) = (w.x(), w.y());
+            let (mut x, mut y)   : (i32, i32) = (0, 0);
+            move |w, evt| {
+                match evt {
+                    Event::Push => {
+                        wx = w.x(); wy = w.y();
+                        x = fltk::app::event_x(); y = fltk::app::event_y();
+                        true
+                    },
+                    Event::Drag => {
+                        let dx = fltk::app::event_x() - x;
+                        let dy = fltk::app::event_y() - y;
+                        wx = wx + dx;
+                        wy = wy + dy;
+                        w.set_pos(wx, wy);
+                        true
+                    },
+                    Event::KeyDown => {
+                        if fltk::app::event_key() == Key::Escape {
+                            // pretend like we handled it
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    _ => false,
+                }
+            }
+        });
+        
+        p
     }
     
     /** Instantiate the UI with the "default" color map, which is a single
@@ -471,11 +522,16 @@ impl Pane {
         self.win.remove(&self.default_color);
         self.win.clear();
         
-        let pane_height = ((self.gradients.len() as i32) + 2) * GRADIENT_BUTTON_SIZE;
+        let pane_height = ((self.gradients.len() as i32) + 3) * GRADIENT_BUTTON_SIZE;
         self.win.set_size(PANE_WIDTH, pane_height);
         
+        let lab = Frame::default().with_label("Color Map")
+            .with_size(PANE_WIDTH, GRADIENT_BUTTON_SIZE)
+            .with_pos(0, 0);
+        self.win.add(&lab);
+        
         for (n, grad) in self.gradients.iter_mut().enumerate() {
-            let y_pos = (n as i32) * GRADIENT_BUTTON_SIZE;
+            let y_pos = (n as i32 + 1) * GRADIENT_BUTTON_SIZE;
             let mut ib = Button::default().with_label("@+")
                 .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
                 .with_pos(0, y_pos);
@@ -484,6 +540,7 @@ impl Pane {
             
             self.win.add(grad.get_row());
             grad.set_pos(GRADIENT_BUTTON_SIZE, y_pos);
+            grad.show();
             
             let mut rb = Button::default().with_label("X")
                 .with_size(GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
@@ -504,7 +561,7 @@ impl Pane {
             });
         }
         
-        let add_row_ypos = (self.gradients.len() as i32) * GRADIENT_BUTTON_SIZE;
+        let add_row_ypos = (self.gradients.len() as i32 + 1) * GRADIENT_BUTTON_SIZE;
         let mut add_butt = Button::default().with_label("@+")
             .with_size(2 * GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE)
             .with_pos(0, add_row_ypos);
@@ -525,6 +582,7 @@ impl Pane {
  
         let default_row_ypos = add_row_ypos + GRADIENT_BUTTON_SIZE;
         self.default_color.set_pos(GRADIENT_TOTAL_WIDTH, default_row_ypos);
+        self.default_color.set_size(2 * GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
         self.default_color.set_label("default color");
         self.default_color.set_align(Align::Left);
         self.win.add(&self.default_color);

@@ -74,13 +74,14 @@ const WINDOW_SIZE_KLUDGE: i32 = 24;
 const MIN_IMAGE_DIMENSION: usize = 16;
 
 impl Pane {
-    pub fn new(params: ImageParams) -> Rc<RefCell<Pane>> {
+    pub fn new(params: ImageParams, version: &str) -> Rc<RefCell<Pane>> {
         let (fxpix, fypix) = (params.xpix as i32, params.ypix as i32);
-        let mut w = DoubleWindow::default().with_label("JSet-Desktop")
+        let mut w = DoubleWindow::default()
             .with_size(
                 fxpix + CTRL_COLUMN_WIDTH + WINDOW_SIZE_KLUDGE,
                 fypix + WINDOW_SIZE_KLUDGE
             );
+        w.set_label(&format!("JSet-Desktop {}", version));
         w.set_border(true);
         w.make_resizable(true);
         
@@ -174,18 +175,25 @@ impl Pane {
             let p = p.clone();
             move |_, evt| {
                 match evt {
-                    Event::KeyDown => {
-                        if fltk::app::event_key() == Key::Enter {
+                    Event::KeyDown => match fltk::app::event_key() {
+                        Key::Enter => {
                             p.borrow_mut().reiterate();
                             true
-                        } else {
-                            false
-                        }
+                        },
+                        Key::Escape => {
+                            // Pretend like we're handling this, so the app
+                            // won't quit.
+                            true
+                        },
+                        _ => false,
                     },
                     _ => false,
                 }
             }
         });
+        
+        // But then do quit when we close the window.
+        w.set_callback(|_| { fltk::app::quit(); });
         
         imgf.handle({
             let p = p.clone();
