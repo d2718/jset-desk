@@ -202,19 +202,4 @@ pub fn make_iter_map(
 #[cfg(test)]
 mod test {
     use super::*;
-    
-    #[test]
-    fn iter_test() {
-        let mut imgp = ImageParams::default();
-        imgp.ypix = imgp.ypix + 4;
-        let iterp = IterParams::Mandlebrot;
-        
-        let test_chunks = make_iter_map(imgp, iterp, 256, 3);
-        for chunk in &test_chunks {
-            println!("chunk {}: starts {}, {} lines, {} values",
-                chunk.chunk_order, chunk.y_start, chunk.n_rows,
-                chunk.data.len());
-        }
-        
-    }
 }

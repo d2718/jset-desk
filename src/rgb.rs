@@ -13,7 +13,7 @@ use std::rc::Rc;
 use fltk::{
     prelude::*,
     button::Button,
-    enums::Align,
+    enums::{Align, Key, Shortcut},
     frame::Frame,
     group::Pack,
     valuator::{HorNiceSlider, ValueInput},
@@ -177,9 +177,9 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
     
     let butt_width = (PICKER_LABEL_WIDTH + PICKER_SLIDER_WIDTH + PICKER_INPUT_WIDTH) / 2;
     let butt_ypos = 3 * PICKER_ROW_HEIGHT;
-    let mut ok = Button::new(0, butt_ypos, butt_width, PICKER_ROW_HEIGHT, "Set");
+    let mut ok = Button::new(0, butt_ypos, butt_width, PICKER_ROW_HEIGHT, "Set @returnarrow");
     let mut no = Button::new(butt_width, butt_ypos, butt_width,
-                                PICKER_ROW_HEIGHT, "Cancel");
+                                PICKER_ROW_HEIGHT, "Cancel (Esc)");
     
     w.end();
     w.make_modal(true);
@@ -247,10 +247,13 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
             r.set(Some(grgb()));
         }
     });
+    ok.set_shortcut(Shortcut::from_key(Key::Enter));
+    
     no.set_callback({
         let p = picking.clone();
         move |_| { p.set(false); }
     });
+    no.set_shortcut(Shortcut::from_key(Key::Escape));
     
     while picking.get() { fltk::app::wait(); }
     
@@ -308,6 +311,7 @@ impl Gradient {
                 let cur_col = b.color();
                 if let Some(c) = pick_color(RGB::from_color(cur_col)) {
                     b.set_color(c.to_color());
+                    b.redraw();
                 }
             }
         );
@@ -316,6 +320,7 @@ impl Gradient {
                 let cur_col = b.color();
                 if let Some(c) = pick_color(RGB::from_color(cur_col)) {
                     b.set_color(c.to_color());
+                    b.redraw();
                 }
             }
         );
@@ -580,7 +585,7 @@ mod test {
     #[test]
     fn make_gradient() {
         let a = fltk::app::App::default();
-        let g = Gradient::new(RGB::black(), RGB::black());
+        let g = Gradient::new(RGB::black(), RGB::black(), 256);
         let mut w = DoubleWindow::default().with_size(400, 400);
         w.add(g.get_row());
         let mut b = Button::default().with_pos(100, 100)

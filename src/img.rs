@@ -12,6 +12,7 @@ use std::process::{Command, Stdio};
 use fltk::{
     prelude::*,
     button::{Button, RadioRoundButton},
+    dialog,
     enums::{Align, Color, Event, Key},
     frame::Frame,
     group::{Flex, Pack, PackType, Scroll},
@@ -445,7 +446,7 @@ impl Pane {
             self.current_params,
             iterparams,
             colormap.len(),
-            3
+            num_cpus::get_physical()
         );
         let new_fimage = itermap.color(&colormap);
         self.set_image(new_fimage);
@@ -459,30 +460,43 @@ impl Pane {
         #[cfg(target_family="wasm")]
         unimplemented!();
         
+        let img_zoom = match self.get_img_zoom_state() {
+            Some(n) => n,
+            None => {
+                dialog::alert_default("Illegal image zoom state; unable to save.");
+                return Ok(());
+            }
+        };
+        
+        let xpix = self.current_params.xpix / img_zoom;
+        let ypix = self.current_params.ypix / img_zoom;
+        
         match Command::new(im_command).arg("-version").output() {
             Ok(_) => {
+                let fname = match pick_a_file(".png") {
+                    Some(fname) => fname,
+                    None => { return Ok(()); }
+                };
                 let mut cmd = Command::new(im_command)
                     .args(["-", "-define", "png:compression-filter=2",
                             "-define", "png:compression-level=9",
                             "-define", "png:compression-strategy=1",
-                            "image.png"])
+                            &fname])
                     .stdin(Stdio::piped())
                     .spawn()?;
                 let mut cmd_in = cmd.stdin.as_mut().unwrap();
-                write!(&mut cmd_in, "P6 {} {} 255\n",
-                    self.current_params.xpix,
-                    self.current_params.ypix,
-                )?;
+                write!(&mut cmd_in, "P6 {} {} 255\n", xpix, ypix)?;
                 cmd_in.write_all(&self.image_data)?;
                 cmd.wait().unwrap();
             },
             Err(_) => {
-                let file = File::create("image.ppm")?;
+                let fname = match pick_a_file(".ppm") {
+                    Some(fname) => fname,
+                    None => { return Ok(()); }
+                };
+                let file = File::create(&fname)?;
                 let mut w = BufWriter::new(file);
-                write!(&mut w, "P6 {} {} 255\n",
-                    self.current_params.xpix,
-                    self.current_params.ypix,
-                )?;
+                write!(&mut w, "P6 {} {} 255\n", xpix, ypix)?;
                 w.write_all(&self.image_data)?;
                 w.flush()?;
             },
@@ -492,7 +506,48 @@ impl Pane {
     }
 }
 
+fn pick_a_file(extension: &str) -> Option<String> {
+    let lc_ext = extension.to_ascii_lowercase();
+    let filter = format!("*{}\t*{}", &lc_ext, &extension.to_ascii_uppercase());
+    
+    let mut fname = match dialog::file_chooser(
+        "Name your image file:", &filter, ".", true
+    ) {
+        None => { return None; },
+        Some(f) => f,
+    };
+    
+    if fname.to_ascii_lowercase().ends_with(&lc_ext) {
+        return Some(fname);
+    }
+    
+    fname.push_str(&extension);
+    return Some(fname);
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    
+    #[test]
+    fn test_save() {
+        let a = fltk::app::App::default();
+    
+        let mut p = Pane::new(ImageParams::default());
+        p.borrow_mut().reiterate();
+        let res = p.borrow().save_image_data();
+        println!("{:?}", &res);
+        fltk::app::quit();
+    }
+    
+    #[test]
+    fn test_esc() {
+        let a = fltk::app::App::default();
+        let mut p = Pane::new(ImageParams::default());
+        p.borrow_mut().reiterate();
+        
+        println!("{:?}", p.borrow().win.trigger());
+        
+        a.run().unwrap();
+    }
 }
