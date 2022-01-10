@@ -8,7 +8,7 @@ use jset_desk::*;
 fn main() {
     let a = fltk::app::App::default();
     
-    let mut p = img::Pane::new(
+    let p = img::Pane::new(
         img::ImageParams::default(),
         "v0.1"
     );

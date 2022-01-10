@@ -262,7 +262,7 @@ pub fn pick_color(col: RGB) -> Option<RGB> {
 
 /**
 Instantiates and wraps a UI element (rather, a collection of elements--a
-`group::Pack`) that represents a single gradient in a color map. The "from"
+`DoubleWindow`) that represents a single gradient in a color map. The "from"
 color, the "to" color, and the number of steps between them are all editable.
 */
 pub struct Gradient {
@@ -276,13 +276,13 @@ pub struct Gradient {
 const GRADIENT_BUTTON_SIZE: i32 = 32;
 // width of the input for specifying the number of steps
 const GRADIENT_STEPS_WIDTH: i32 = 64;
-// calculated width of the entire `Pack`
+// calculated width of the entire window
 const GRADIENT_TOTAL_WIDTH: i32 = (2 * GRADIENT_BUTTON_SIZE) + GRADIENT_STEPS_WIDTH;
 
 impl Gradient {
     /** Instantiate a new `Gradient` element from and to the given colors. */
     pub fn new(from_col: RGB, to_col: RGB, n_steps: usize) -> Gradient {
-        let mut rw = DoubleWindow::default()
+        let rw = DoubleWindow::default()
             .with_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
         
         let mut fr = Button::default()
@@ -337,7 +337,7 @@ impl Gradient {
     pub fn set_pos(&mut self, x: i32, y: i32) { self.row.set_pos(x, y); }
     /// Show the element.
     pub fn show(&mut self) {
-        self.row.set_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
+        // self.row.set_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
         self.row.show();
     }
     
@@ -456,20 +456,6 @@ impl Pane {
         
         p.borrow_mut().me = Some(p.clone());
         
-        /*
-        w.handle({
-            let p = p.clone();
-            move |_, evt| {
-                if evt != Event::Move {
-                    println!("{:?}", &evt);
-                    return false;
-                }
-                p.borrow_mut().show();
-                true
-            }
-        });
-        */
-        
         w.handle({
             let (mut wx, mut wy) : (i32, i32) = (w.x(), w.y());
             let (mut x, mut y)   : (i32, i32) = (0, 0);
@@ -513,6 +499,8 @@ impl Pane {
         
         p
     }
+    
+    pub fn focus(&mut self) { self.win.show() }
     
     /** Redraw the UI when necessary. */
     fn show(&mut self) {

@@ -118,6 +118,7 @@ const DEFAULT_PANE_HEIGHT: i32 = ROW_HEIGHT * 12;
 const SELECTOR_WIDTH: i32 = 192;
  
 pub struct Pane {
+    win:      DoubleWindow,
     selector: Choice,
     pm_a:     Coef,
     pm_b:     Coef,
@@ -272,6 +273,7 @@ impl Pane {
         });
         
         let p = Pane {
+            win:      w.clone(),
             selector: sel.clone(),
             pm_a:     a,
             pm_b:     b,
@@ -280,6 +282,8 @@ impl Pane {
         
         p
     }
+    
+    pub fn focus(&mut self) { self.win.show() }
     
     pub fn get_params(&self) -> IterParams {
         match self.selector.value() {

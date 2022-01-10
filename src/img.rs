@@ -27,6 +27,9 @@ use crate::iter;
 use crate::rgb;
 use crate::rgb::RGB;
 
+const FLTK_C: Key = Key::from_char('c');
+const FLTK_I: Key = Key::from_char('i');
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ImageParams {
     pub xpix: usize,
