@@ -6,7 +6,6 @@ use std::cell::RefCell;
 use std::default::Default;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::Path;
 use std::rc::Rc;
 use std::process::{Command, Stdio};
 
@@ -55,7 +54,6 @@ pub struct Pane {
     img_frame: Frame,
     width_ipt: IntInput,
     height_ipt: IntInput,
-    zoom_ipt: ValueInput,
     nudge_ipt: ValueInput,
     img_zoom_1: RadioRoundButton,
     img_zoom_2: RadioRoundButton,
@@ -126,7 +124,7 @@ impl Pane {
         let mut nudge_right_butt = Button::default().with_label("@->")
             .with_size(HALF_BUTTON, 0);
         nudge_top_pack.end();
-        let mut nudge_bottom_pack = Pack::default().with_size(0, ROW_HEIGHT)
+        let nudge_bottom_pack = Pack::default().with_size(0, ROW_HEIGHT)
             .with_type(PackType::Horizontal);
         let mut nudge_left_butt = Button::default().with_label("@<-")
             .with_size(HALF_BUTTON, 0);
@@ -152,9 +150,6 @@ impl Pane {
         w.end();
         w.show();
         
-        let scroll_size = scroll_region.scrollbar_size();
-        println!("scrollbar size: {}", scroll_size);
-        
         let p = Pane {
             win: w.clone(),
             img_frame: imgf.clone(),
@@ -163,7 +158,6 @@ impl Pane {
             width_ipt: width_pix_ipt.clone(),
             height_ipt: height_pix_ipt.clone(),
             current_params: params,
-            zoom_ipt: zoom_amt_ipt.clone(),
             nudge_ipt: nudge_amt_ipt.clone(),
             image_data: Vec::new(),
             frgb_data: rgb::FImageData::new(0, 0, Vec::new()),
@@ -180,7 +174,6 @@ impl Pane {
             move |_, evt| {
                 match evt {
                     Event::KeyDown => {
-                        println!("Handling event! {:?}", &evt);
                         if fltk::app::event_key() == Key::Enter {
                             p.borrow_mut().reiterate();
                             true
@@ -317,7 +310,13 @@ impl Pane {
         
         save_butt.set_callback({
             let p = p.clone();
-            move |_| { p.borrow().save_image_data(); }
+            move |_| {
+                if let Err(e) = p.borrow().save_image_data() {
+                    fltk::dialog::message_default(
+                        &format!("Error saving file: {}", &e)
+                    );
+                }
+            }
         });
         
         p
@@ -381,9 +380,6 @@ impl Pane {
     }
     
     pub fn redraw_image(&mut self) {
-        let width  = self.current_params.xpix;
-        let height = self.current_params.ypix;
-        
         let (pixcols, pixlines, rgb8_data) = match self.get_img_zoom_state() {
             Some(1) => self.make_image_data_native(),
             Some(n) => self.make_image_data_scaled(n),
@@ -443,10 +439,8 @@ impl Pane {
             Err(e) => { eprintln!("Error parsing new image height: {}", &e); }
         }
         
-        
         let colormap = self.colors.borrow().generate_color_map();
         let iterparams = self.get_iter_params();
-        println!("IterParams: {:?}", &iterparams);
         let itermap = iter::make_iter_map(
             self.current_params,
             iterparams,
@@ -458,15 +452,20 @@ impl Pane {
     }
     
     pub fn save_image_data(&self) -> std::io::Result<()> {
-        let filename = String::from("image.png");
+        #[cfg(target_family="unix")]
+        let im_command = "convert";
+        #[cfg(target_family="windows")]
+        let im_command = "magick";
+        #[cfg(target_family="wasm")]
+        unimplemented!();
         
-        match Command::new("convert").arg("-version").output() {
+        match Command::new(im_command).arg("-version").output() {
             Ok(_) => {
-                let mut cmd = Command::new("convert")
+                let mut cmd = Command::new(im_command)
                     .args(["-", "-define", "png:compression-filter=2",
                             "-define", "png:compression-level=9",
                             "-define", "png:compression-strategy=1",
-                            &filename])
+                            "image.png"])
                     .stdin(Stdio::piped())
                     .spawn()?;
                 let mut cmd_in = cmd.stdin.as_mut().unwrap();
@@ -478,7 +477,7 @@ impl Pane {
                 cmd.wait().unwrap();
             },
             Err(_) => {
-                let file = File::create(&filename)?;
+                let file = File::create("image.ppm")?;
                 let mut w = BufWriter::new(file);
                 write!(&mut w, "P6 {} {} 255\n",
                     self.current_params.xpix,
@@ -490,16 +489,6 @@ impl Pane {
         }
         
         Ok(())
-        
-        //~ let file = File::create("image.ppm").unwrap();
-        //~ let mut w = BufWriter::new(file);
-        //~ write!(&mut w, "P6 {} {} {}\n",
-            //~ self.current_params.xpix,
-            //~ self.current_params.ypix,
-            //~ 255
-        //~ ).unwrap();
-        //~ w.write_all(&self.image_data);
-        //~ w.flush();
     }
 }
 

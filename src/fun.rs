@@ -118,10 +118,7 @@ const DEFAULT_PANE_HEIGHT: i32 = ROW_HEIGHT * 11;
 const SELECTOR_WIDTH: i32 = 192;
  
 pub struct Pane {
-    win:    DoubleWindow,
     selector: Choice,
-    pm_win:   DoubleWindow,
-    poly_win: DoubleWindow,
     pm_a:     Coef,
     pm_b:     Coef,
     coefs:    Rc<RefCell<Vec<Coef>>>,
@@ -240,10 +237,7 @@ impl Pane {
         w.show();
         
         let p = Pane {
-            win:      w.clone(),
             selector: sel.clone(),
-            pm_win:   pw.clone(),
-            poly_win: DoubleWindow::default(),
             pm_a:     a,
             pm_b:     b,
             coefs:    cs,

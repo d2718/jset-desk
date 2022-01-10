@@ -1,8 +1,6 @@
 /*!
 testing the iteration->coloration->display pipeline
 */
-use fltk::enums::{Event, Key};
-
 use jset_desk::*;
 
 fn main() {
