@@ -67,7 +67,7 @@ impl RGB {
         fltk::enums::Color::from_rgb(rbyte, gbyte, bbyte)
     }
     
-    /** Convert to a four-byte array of `RGBA`. */
+    /** Convert to a four-byte array of `[R, G, B, A]`. */
     pub fn to_rgba(&self) -> [u8; 4] {
         let rbyte = self.r as u8;
         let gbyte = self.g as u8;
@@ -76,17 +76,13 @@ impl RGB {
         [rbyte, gbyte, bbyte, 0xFF]
     }
     
+    /** Convert to a three-byte array of `[R, G, B]`. */
     pub fn to_rgb8(&self) -> [u8; 3] {
         let rbyte = self.r as u8;
         let gbyte = self.g as u8;
         let bbyte = self.b as u8;
         
         [rbyte, gbyte, bbyte]
-    }
-    
-    /** The default color */
-    pub fn black() -> RGB {
-        RGB { r:0.0, g:0.0, b:0.0 }
     }
     
     pub const BLACK:   RGB = RGB { r: 0.0, g: 0.0, b: 0.0 };
@@ -99,6 +95,11 @@ impl RGB {
     pub const MAGENTA: RGB = RGB { r: 255.0, g: 0.0, b: 255.0 };
 }
 
+/**
+Average the values of the colors in the given slice.
+
+This function is used to display scaled-down versions of large images.
+*/
 pub fn color_average(dat: &[RGB]) -> RGB {
     let mut rtot = 0.0f32;
     let mut gtot = 0.0f32;
@@ -115,6 +116,12 @@ pub fn color_average(dat: &[RGB]) -> RGB {
     RGB::new(rtot/n_float, gtot/n_float, btot/n_float)
 }
 
+/**
+An image, with pixels specified as `RGB` values.
+
+Also contains width & height in number of pixels, and can expose its data
+as a slice, or be consumed to give up the data as an owned `Vec`.
+*/
 pub struct FImageData {
     w: usize,
     h: usize,
@@ -335,13 +342,16 @@ impl Gradient {
     
     /// Set the position of the element in the containing window.
     pub fn set_pos(&mut self, x: i32, y: i32) { self.row.set_pos(x, y); }
-    /// Show the element.
+    /// Explicitly show the element.
+    ///
+    /// This seems to be a kludgy requirement for getting proper behavior
+    /// under Windows.
     pub fn show(&mut self) {
         // self.row.set_size(GRADIENT_TOTAL_WIDTH, GRADIENT_BUTTON_SIZE);
         self.row.show();
     }
     
-    /// Get a reference to the UI element for adding to `Window`s.
+    /// Get a reference to the UI element for adding to other collections.
     pub fn get_row(&self) -> &DoubleWindow { &self.row }
     
     /// Get the starting color.
@@ -359,7 +369,7 @@ impl Gradient {
 impl Default for Gradient {
     /// A `Default` `Gradient` goes from black to black.
     fn default() -> Gradient {
-        Gradient::new(RGB::black(), RGB::black(), 256)
+        Gradient::new(RGB::BLACK, RGB::BLACK, 256)
     }
 }
 
@@ -372,6 +382,10 @@ pub struct ColorMap {
 }
 
 impl ColorMap {
+    /**
+    Instantiate a new `ColorMap` from the given slice of `Gradient`s and
+    default color.
+    */
     pub fn make(gradients: &[Gradient], def: RGB) -> ColorMap {
         let total_steps = gradients.iter().map(|g| g.get_steps()).sum();
         let mut new_data: Vec<RGB> = Vec::with_capacity(total_steps);
@@ -397,6 +411,14 @@ impl ColorMap {
         ColorMap { data: new_data, default: def }
     }
     
+    /**
+    Return the `n`th color in the `ColorMap`, or the default color if there
+    aren't that many colors.
+    
+    This function is meant to answer the question, "What color should a
+    point that takes `n` iterations to diverge past the given limit be
+    colored?"
+    */
     pub fn get(&self, n: usize) -> RGB {
         match self.data.get(n) {
             None => self.default,
@@ -404,6 +426,7 @@ impl ColorMap {
         }
     }
     
+    /** Return the total number of steps (and thus shades) in the map. */
     pub fn len(&self) -> usize { self.data.len() }
 }
 
@@ -431,7 +454,7 @@ impl Pane {
     pub fn new() -> Rc<RefCell<Pane>> {
         let mut def_c = Button::default()
             .with_size(2 * GRADIENT_BUTTON_SIZE, GRADIENT_BUTTON_SIZE);
-        def_c.set_color(RGB::black().to_color());
+        def_c.set_color(RGB::BLACK.to_color());
         def_c.set_tooltip("set default color");
         
         let mut w = DoubleWindow::default().with_label("Color Map")
@@ -456,6 +479,25 @@ impl Pane {
         
         p.borrow_mut().me = Some(p.clone());
         
+        /*
+        Because
+        
+          * We don't want people clicking on the little `x` and closing
+            the color map pane.
+            
+          * There seems to be a Win10 bug (as far as I can tell, it's a bug,
+            because this doesn't happen on my Debian system) where dragging
+            this particular window around by its title bar causes the window
+            to resize, which messes up the size and layout of all the
+            contained widgets.
+        
+        We have removed the "borders" from this window (which includes the
+        title bar) and are implementing "click and drag", which seems to
+        not manifest the bug.
+        
+        We are also pretending to handle the user hitting `Escape` because
+        we don't want that to close the window, either.
+        */
         w.handle({
             let (mut wx, mut wy) : (i32, i32) = (w.x(), w.y());
             let (mut x, mut y)   : (i32, i32) = (0, 0);
@@ -500,9 +542,11 @@ impl Pane {
         p
     }
     
-    pub fn focus(&mut self) { self.win.show() }
+    /**
+    Redraw the UI when necessary.
     
-    /** Redraw the UI when necessary. */
+    This is generally when a `Gradient` is added or removed.
+    */
     fn show(&mut self) {
         for grad in self.gradients.iter() {
             self.win.remove(grad.get_row());
@@ -589,14 +633,14 @@ impl Pane {
         if n >= self.gradients.len() {
             let new_to = RGB::from_color(self.default_color.color());
             let new_from = match self.gradients.last() {
-                None => RGB::black(),
+                None => RGB::BLACK,
                 Some(lg) => lg.get_to(),
             };
             let new_g = Gradient::new(new_from, new_to, 256);
             self.gradients.push(new_g);
         } else {
             let new_from = if n == 0 {
-                RGB::black()
+                RGB::BLACK
             } else {
                 self.gradients[n-1].get_to()
             };
@@ -608,6 +652,10 @@ impl Pane {
         self.show();
     }
     
+    /**
+    Using the contained `Gradient`s and default color, generate a `ColorMap`
+    that can be used to color iteration maps.
+    */
     pub fn generate_color_map(&self) -> ColorMap {
         ColorMap::make(
             &self.gradients,

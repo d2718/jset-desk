@@ -9,8 +9,21 @@ use crate::cx::Cx;
 use crate::img::ImageParams;
 use crate::rgb;
 
+// When a point's squared modulus exceeds this amount under iteration, it
+// will be considered to have "diverged" and will be colored the "default"
+// color.
 const SQ_MOD_LIMIT: f64 = 1.0e100;
 
+/**
+A type to fully describe the type of iteration function to be used.
+
+This combined with an iteration limit (as provided by the length of a
+target `rgb::ColorMap`) is all the information required for iterating
+a point.
+
+The `fun::Pane` provides an interface for the user to specify this,
+its `.get_params()` method returns one of these.
+*/
 #[derive(Clone, Debug, PartialEq)]
 pub enum IterParams {
     Mandlebrot,
@@ -18,6 +31,15 @@ pub enum IterParams {
     Polynomial(Vec<Cx>)
 }
 
+/*
+A chunk of image data for parallel processing.
+
+The `IterChunk` starts life with the `data` field empty; all the other
+fields contain information about the desired image and what part of it the
+`IterChunk` is responsible for. It is then consumed by the function
+`iterate_chunk()` and reborn with its `data` field full, describing the
+iteration map for its section of the image.
+*/
 struct IterChunk {
     chunk_order: usize,
     params: IterParams,
@@ -32,6 +54,13 @@ struct IterChunk {
     data: Vec<usize>,
 }
 
+/**
+An image in "iteration map" form. Each pixel is represented by a `usize`
+indicating how many iterations the point there took to "diverge". The
+actual internal representation is opaque, and its only purpose, really,
+is to be combined with an `rgb::ColorMap` in order to produce an
+`rgb::FImageData`.
+*/
 pub struct IterMap {
     pub width:  usize,
     pub height: usize,
@@ -39,6 +68,27 @@ pub struct IterMap {
 }
 
 impl IterMap {
+    /* Stitch together the given chunks after they've been processed. */
+    fn compile(
+        xpix: usize,
+        ypix: usize,
+        mut iterated_chunks: Vec<IterChunk>
+    ) -> IterMap {
+        iterated_chunks.sort_by_key(|x| x.chunk_order);
+        
+        IterMap {
+            width:  xpix,
+            height: ypix,
+            chunks: iterated_chunks,
+        }
+    }
+    
+    /**
+    Combine this `IterMap` with its target `rgb::ColorMap` in order to
+    produce a "floating-point image", represented by the `rgb::FImageData`.
+    This can then be further processed or turned into an external image
+    format.
+    */
     pub fn color(&self, map: &rgb::ColorMap) -> rgb::FImageData {
         let mut v: Vec<rgb::RGB> = Vec::with_capacity(self.width * self.height);
         for chunk in self.chunks.iter() {
@@ -190,13 +240,7 @@ pub fn make_iter_map(
         }
     }
     
-    done_chunks.sort_by_key(|x| x.chunk_order);
-    
-    IterMap {
-        width: img_params.xpix,
-        height: img_params.ypix,
-        chunks: done_chunks,
-    }
+    IterMap::compile(img_params.xpix, img_params.ypix, done_chunks)
 }
 
 #[cfg(test)]
