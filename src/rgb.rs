@@ -31,7 +31,7 @@ numbers in the range (0.0, 255.0). This is the form in which it's easiest
 to do calculations. Includes methods for converting to other useful data
 representations.
 */
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RGB { r: f32, g: f32, b: f32 }
 
 // For constraining arguments to `RGB::new()` to the proper range.
@@ -430,6 +430,15 @@ impl ColorMap {
     pub fn len(&self) -> usize { self.data.len() }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct GradientSpec { from: RGB, to: RGB, steps: usize }
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColorMapSpec { grads: Vec<GradientSpec> }
+
+impl ColorMapSpec {
+    pub fn empty() -> ColorMapSpec { ColorMapSpec { grads: Vec::new() } }
+}
+
 /**
 Instantiates and wraps the UI window for specifying the color map. The
 internals require references to the struct in order to function properly
@@ -661,6 +670,18 @@ impl Pane {
             &self.gradients,
             RGB::from_color(self.default_color.color())
         )
+    }
+    
+    pub fn get_spec(&self) -> ColorMapSpec {
+        let gspex: Vec<GradientSpec> = self.gradients.iter().map(
+            |g| GradientSpec {
+                from: g.get_from(),
+                to: g.get_to(),
+                steps: g.get_steps(),
+            }
+        ).collect()
+        
+        ColorMapSpec { grads: gspex }
     }
 }
 

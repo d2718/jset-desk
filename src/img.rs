@@ -62,7 +62,11 @@ pub struct Pane {
     img_zoom_4: RadioRoundButton,
     image_data: Vec<u8>,
     frgb_data: rgb::FImageData,
+    iter_map: Option<iter::IterMap>,
     current_params: ImageParams,
+    last_params: ImageParams,
+    last_iter_params: iter::IterParams,
+    last_color_spec: rgb::ColorMapSpec,
 }
 
 const ROW_HEIGHT: i32 = 24;
@@ -163,6 +167,8 @@ impl Pane {
             nudge_ipt: nudge_amt_ipt.clone(),
             image_data: Vec::new(),
             frgb_data: rgb::FImageData::new(0, 0, Vec::new()),
+            iter_map: None,
+            last_color_spec: ColorMapSpec::empty(),
             img_zoom_1: ab1.clone(),
             img_zoom_2: ab2.clone(),
             img_zoom_3: ab3.clone(),
@@ -449,6 +455,7 @@ impl Pane {
         }
         
         let colormap = self.colors.borrow().generate_color_map();
+        let color_spec = self.colors.borrow().get_spec();
         let iterparams = self.get_iter_params();
         let itermap = iter::make_iter_map(
             self.current_params,

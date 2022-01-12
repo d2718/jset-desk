@@ -122,7 +122,7 @@ map for a portion of an image.
 Processing with the `.iterate()` method will consume this and return an
 `IterMapchunk`, which contains the actual portion of the iteration map.
 */
-struct ChunkRecipe {
+struct IterMapChunk {
     chunk_order: usize,
     params: IterParams,
     width: usize,
@@ -133,27 +133,16 @@ struct ChunkRecipe {
     plane_height: f64,
     y_start: usize,
     n_rows: usize,
-}
-
-/*
-A chunk of an image, specified by a `ChunkRecipe`, after processing.
-
-A vector of these, together with image dimensions in pixels, specify an
-iteration map.
-*/
-struct IterMapChunk {
-    chunk_order: usize,
+    last_limit: usize,
     data: Vec<usize>,
 }
 
-impl ChunkRecipe {
-    /* Consume this `ChunkRecipe`, do the iteration, and produce an
-    `IterMapChunk` */
-    fn iterate(self, limit: usize) -> IterMapChunk {
-        let mut data = Vec::with_capacity(self.width * self.n_rows);
+impl IterMapChunk {
+    fn iterate(&mut self, limit: usize) {
+        let mut new_data = Vec::with_capacity(self.width * self.n_rows);
         let f_width  = self.width as f64;
         let f_height = self.height as f64;
-        let f = match self.params {
+        let f = match self.params.clone() {
             IterParams::Mandlebrot => Box::new(mandlebrot_iterator),
             IterParams::PseudoMandlebrot(a, b) => pseudomandle_maker(a, b),
             IterParams::Polynomial(v) => polyiter_maker(v),
@@ -166,14 +155,40 @@ impl ChunkRecipe {
                 let x_frac = (xp as f64) / f_width;
                 let x = self.x + (x_frac * self.plane_width);
                 let n = f(Cx { re: x, im: y }, limit);
-                data.push(n);
+                new_data.push(n);
             }
         }
         
-        IterMapChunk {
-            chunk_order: self.chunk_order,
-            data,
+        self.last_limit = limit;
+        self.data = new_data;
+    }
+    
+    fn reiterate(&mut self, limit: usize) {
+        let f_width  = self.width as f64;
+        let f_height = self.height as f64;
+        let f = match self.params.clone() {
+            IterParams::Mandlebrot => Box::new(mandlebrot_iterator),
+            IterParams::PseudoMandlebrot(a, b) => pseudomandle_maker(a, b),
+            IterParams::Polynomial(v) => polyiter_maker(v),
+        };
+        
+        let mut idx_base = 0;
+        for yp in self.y_start..(self.y_start + self.n_rows) {
+            let y_frac = (yp as f64) / f_height;
+            let y = self.y - (y_frac * self.plane_height);
+            for xp in 0..self.width {
+                let idx = idx_base + xp;
+                if self.data[idx] == self.last_limit {
+                    let x_frac = (xp as f64) / f_width;
+                    let x = self.x + (x_frac * self.plane_width);
+                    let n = f(Cx { re: x, im: y}, limit);
+                    self.data[idx] = n;
+                }
+            }
+            idx_base = idx_base + self.width;
         }
+        
+        self.last_limit = limit;
     }
 }
 
@@ -220,6 +235,33 @@ impl IterMap {
         }
         rgb::FImageData::new(self.width, self.height, v)
     }
+    
+    pub fn reiterate(&mut self, new_limit: usize, n_threads: usize) {
+        let mut done_chunks: Vec<IterMapChunk> = Vec::new();
+        let n_chunks = self.chunks.len();
+        let mut active_threads: usize = 0;
+        let (tx, rx) = mpsc::channel::<IterMapChunk>();
+        while done_chunks.len() < n_chunks {
+            if active_threads < n_threads {
+                if let Some(mut imc) = self.chunks.pop() {
+                    let txc = tx.clone();
+                    thread::spawn(move || {
+                        imc.reiterate(new_limit);
+                        txc.send(imc).unwrap();
+                    });
+                    active_threads += 1;
+                }
+            }
+            if active_threads == n_threads || self.chunks.len() == 0 {
+                let imc = rx.recv().unwrap();
+                active_threads -= 1;
+                done_chunks.push(imc);
+            }
+        }
+        
+        done_chunks.sort_by_key(|x| x.chunk_order);
+        self.chunks = done_chunks;
+    }
 }
 
 /**
@@ -240,10 +282,10 @@ pub fn make_iter_map(
     let last_chunk_height = img_params.ypix % n_chunks;
     let img_height: f64 = img_params.width * (img_params.ypix as f64) / (img_params.xpix as f64);
     
-    let mut to_process: Vec<ChunkRecipe> = Vec::new();
+    let mut to_process: Vec<IterMapChunk> = Vec::new();
     let mut start_y: usize = 0;
     for n in 0..n_chunks {
-        let ic = ChunkRecipe {
+        let ic = IterMapChunk {
             chunk_order: n,
             params: iter_params.clone(),
             width: img_params.xpix,
@@ -254,12 +296,14 @@ pub fn make_iter_map(
             plane_height: img_height,
             y_start: start_y,
             n_rows: chunk_height,
+            last_limit: 0,
+            data: Vec::new(),
         };
         to_process.push(ic);
         start_y += chunk_height;
     }
     if last_chunk_height > 0 {
-        let ic = ChunkRecipe {
+        let ic = IterMapChunk {
             chunk_order: n_chunks,
             params: iter_params.clone(),
             width: img_params.xpix,
@@ -270,6 +314,8 @@ pub fn make_iter_map(
             plane_height: img_height,
             y_start: start_y,
             n_rows: last_chunk_height,
+            last_limit: 0,
+            data: Vec::new(),
         };
         to_process.push(ic);
     }
@@ -280,12 +326,12 @@ pub fn make_iter_map(
     let (tx, rx) = mpsc::channel::<IterMapChunk>();
     while done_chunks.len() < n_chunks {
         if active_threads < n_threads {
-            if let Some(cr) = to_process.pop() {
+            if let Some(mut imc) = to_process.pop() {
                 #[cfg(test)]
-                println!("chunk {} ->", cr.chunk_order);
+                println!("chunk {} ->", imc.chunk_order);
                 let txc = tx.clone();
                 thread::spawn(move || {
-                    let imc = cr.iterate(iter_limit);
+                    imc.iterate(iter_limit);
                     txc.send(imc).unwrap();
                 });
                 active_threads += 1;
