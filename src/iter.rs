@@ -222,6 +222,13 @@ impl IterMap {
     }
 }
 
+/**
+This function combines all the image and iteration parameters, and does the
+heavy arithmetic to make an `IterMap`.
+
+`iter_limit` should be the length of the target `ColorMap` that will be used
+to color the `IterMap`.
+*/
 pub fn make_iter_map(
     img_params: ImageParams,
     iter_params: IterParams,
