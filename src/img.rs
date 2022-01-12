@@ -65,7 +65,7 @@ pub struct Pane {
     iter_map: Option<iter::IterMap>,
     current_params: ImageParams,
     last_params: ImageParams,
-    last_iter_params: iter::IterParams,
+    last_iter_params: Option<iter::IterParams>,
     last_color_spec: rgb::ColorMapSpec,
 }
 
@@ -168,7 +168,9 @@ impl Pane {
             image_data: Vec::new(),
             frgb_data: rgb::FImageData::new(0, 0, Vec::new()),
             iter_map: None,
-            last_color_spec: ColorMapSpec::empty(),
+            last_color_spec: rgb::ColorMapSpec::empty(),
+            last_iter_params: None,
+            last_params: ImageParams::default(),
             img_zoom_1: ab1.clone(),
             img_zoom_2: ab2.clone(),
             img_zoom_3: ab3.clone(),
@@ -454,16 +456,35 @@ impl Pane {
             Err(e) => { eprintln!("Error parsing new image height: {}", &e); }
         }
         
-        let colormap = self.colors.borrow().generate_color_map();
         let color_spec = self.colors.borrow().get_spec();
         let iterparams = self.get_iter_params();
-        let itermap = iter::make_iter_map(
-            self.current_params,
-            iterparams,
-            colormap.len(),
-            num_cpus::get_physical()
-        );
-        let new_fimage = itermap.color(&colormap);
+        
+        if self.last_params != self.current_params {
+            self.iter_map = Some(iter::make_iter_map(
+                self.current_params,
+                iterparams.clone(),
+                color_spec.len(),
+                num_cpus::get_physical()
+            ));
+            self.last_params = self.current_params;
+            self.last_iter_params = Some(iterparams);
+        } else if self.last_iter_params != Some(iterparams.clone()) {
+            self.iter_map = Some(iter::make_iter_map(
+                self.current_params,
+                iterparams.clone(),
+                color_spec.len(),
+                num_cpus::get_physical()
+            ));
+            self.last_params = self.current_params;
+            self.last_iter_params = Some(iterparams);
+        } else if self.last_color_spec.len() < color_spec.len() {
+            self.iter_map.as_mut().unwrap()
+                .reiterate(color_spec.len(), num_cpus::get_physical());
+        }
+        
+        let colormap = self.colors.borrow().generate_color_map();
+       
+        let new_fimage = self.iter_map.as_ref().unwrap().color(&colormap);
         self.set_image(new_fimage);
     }
     

@@ -437,6 +437,8 @@ pub struct ColorMapSpec { grads: Vec<GradientSpec> }
 
 impl ColorMapSpec {
     pub fn empty() -> ColorMapSpec { ColorMapSpec { grads: Vec::new() } }
+    
+    pub fn len(&self) -> usize { self.grads.iter().map(|g| g.steps).sum() }
 }
 
 /**
@@ -679,7 +681,7 @@ impl Pane {
                 to: g.get_to(),
                 steps: g.get_steps(),
             }
-        ).collect()
+        ).collect();
         
         ColorMapSpec { grads: gspex }
     }
