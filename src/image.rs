@@ -49,6 +49,14 @@ impl RGB {
             b: constrain_f32(blue),
         }
     }
+    
+    pub fn r(&self) -> f32 { self.r }
+    pub fn g(&self) -> f32 { self.g }
+    pub fn b(&self) -> f32 { self.b }
+    
+    pub fn set_r(&mut self, x: f32) { self.r = constrain_f32(x); }
+    pub fn set_g(&mut self, x: f32) { self.g = constrain_f32(x); }
+    pub fn set_b(&mut self, x: f32) { self.b = constrain_f32(x); }
 
     /** Convert to a three-byte `[R, G, B]` array. */
     pub fn to_rgb8(&self) -> [u8; 3] {
@@ -235,11 +243,11 @@ impl FImage32 {
         let n_pix     = pix_lines * pix_cols;
         let mut rgb8_data: Vec<u8> = Vec::with_capacity(n_pix * 3);
         let mut palette: [RGB; SCALE_PALETTE_SIZE]
-                = [RGB::BLACK, SCALE_PALETTE_SIZE];
+                = [RGB::BLACK; SCALE_PALETTE_SIZE];
         
         for yi in 0..pix_lines {
             let base_offs = yi * self.dims.xpix * ratio;
-            for xi in 0..pixcols {
+            for xi in 0..pix_cols {
                 let offs = base_offs + (xi * ratio);
                 let mut pp = 0usize;
                 for y in 0..ratio {
@@ -250,7 +258,7 @@ impl FImage32 {
                     }
                 }
                 let avg_p = RGB::average(&palette[0..pp]);
-                for b in avg_p.to_rgb8().iter {
+                for b in avg_p.to_rgb8().iter() {
                     rgb8_data.push(*b);
                 }
             }
@@ -266,7 +274,7 @@ impl FImage32 {
                 self.dims.ypix,
                 self.to_rgb8_full_resolution()
             )
-        else if scale_factor > MAX_SCALE_FACTOR {
+        } else if scale_factor > MAX_SCALE_FACTOR {
             self.to_rgb8_scaled(MAX_SCALE_FACTOR)
         } else {
             self.to_rgb8_scaled(scale_factor)
