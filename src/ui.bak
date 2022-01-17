@@ -1,0 +1,23 @@
+/*!
+The user interface.
+
+All FLTK garbage goes here.
+*/
+
+
+
+const SPACE_KEY: Key = Key::from_char(' ');
+
+
+
+
+//
+// COLOR PICKER
+//
+
+
+
+//
+// ITERATOR PANE
+//
+

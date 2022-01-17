@@ -2,6 +2,7 @@
 Everything required for specifying and creating the bytes of an image.
 */
 
+use std::default::Default;
 use std::sync::mpsc;
 use std::thread;
 
@@ -166,20 +167,46 @@ impl ImageDims {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Gradient { pub start: RGB, pub end: RGB, pub steps: usize }
 
-#[derive(Clone, Debug)]
-pub struct ColorMap {
+impl Default for Gradient {
+    fn default() -> Self {
+        Self { start: RGB::BLACK, end: RGB::WHITE, steps: 256 }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColorSpec {
     gradients: Vec<Gradient>,
     length: usize,
     default: RGB,
+}
+
+impl ColorSpec {
+    pub fn new(gradients: Vec<Gradient>, default: RGB) -> ColorSpec {
+        let length = gradients.iter().map(|g| g.steps).sum();
+        
+        ColorSpec {
+            gradients,
+            length,
+            default,
+        }
+    }
+    
+    pub fn len(&self) -> usize { self.length }
+    
+    pub fn to_map(self) -> ColorMap { ColorMap::make(self) }
+}
+
+#[derive(Clone, Debug)]
+pub struct ColorMap {
+    spec: ColorSpec,
     colors: Vec<RGB>,
 }
 
 impl ColorMap {
-    pub fn make(gradients: Vec<Gradient>, default: RGB) -> ColorMap {
-        let length = gradients.iter().map(|g| g.steps).sum();
-        let mut colors: Vec<RGB> = Vec::with_capacity(length);
+    pub fn make(spec: ColorSpec) -> ColorMap {
+        let mut colors: Vec<RGB> = Vec::with_capacity(spec.length);
         
-        for grad in gradients.iter() {
+        for grad in spec.gradients.iter() {
             let dr = grad.end.r - grad.start.r;
             let dg = grad.end.g - grad.start.g;
             let db = grad.end.b - grad.start.b;
@@ -195,23 +222,22 @@ impl ColorMap {
             }
         }
         
-        ColorMap { gradients, length, default, colors }
+        ColorMap { spec, colors }
     }
     
-    pub fn len(&self) -> usize { self.length }
+    pub fn len(&self) -> usize { self.spec.length }
     
     pub fn get(&self, n: usize) -> RGB {
         match self.colors.get(n) {
             Some(c) => *c,
-            None => self.default,
+            None => self.spec.default,
         }
     }
 }
 
 impl PartialEq for ColorMap {
     fn eq(&self, other: &Self) -> bool {
-        (self.default == other.default)
-        && (self.gradients == other.gradients)
+        self.spec == other.spec
     }
 }
 
