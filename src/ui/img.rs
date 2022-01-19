@@ -33,8 +33,6 @@ const HALF_BUTTON: i32 = COL_WIDTH / 2;
 const N_SCALERS: usize = 5;
 const MIN_DIMENSION: usize = 16;
 
-const DEFAULT_WIDTH:  i32 = 800;
-const DEFAULT_HEIGHT: i32 = 600;
 const DEFAULT_ZOOM:   f64 = 2.0;
 const DEFAULT_NUDGE:  f64 = 10.0;
 
@@ -45,26 +43,32 @@ pub struct ImgPane {
 }
 
 impl ImgPane {
-    pub fn new(pipe: mpsc::Sender<Msg>, version: &str) -> ImgPane {
+    pub fn new(
+        pipe: mpsc::Sender<Msg>,
+        version: &str,
+        dims: crate::image::ImageDims
+    ) -> ImgPane {
+        let image_xpix = dims.xpix as i32;
+        let image_ypix = dims.ypix as i32;
         let mut w = DoubleWindow::default()
-            .with_size(DEFAULT_WIDTH + COL_WIDTH, DEFAULT_HEIGHT);
+            .with_size(image_xpix + COL_WIDTH, image_ypix);
         w.set_label(&format!("JSet-Desktop {}", version));
         w.set_border(true);
         w.make_resizable(true);
         
-        let mut ctrl = Pack::default().with_size(COL_WIDTH, COL_HEIGHT)
+        let ctrl = Pack::default().with_size(COL_WIDTH, COL_HEIGHT)
             .with_pos(0, 0);
         
         let _ = Frame::default().with_label("Width")
             .with_size(COL_WIDTH, ROW_HEIGHT);
         let mut width_input = IntInput::default().with_size(COL_WIDTH, ROW_HEIGHT);
         width_input.set_tooltip("set image width in pixels");
-        width_input.set_value(&format!("{}", DEFAULT_WIDTH));
+        width_input.set_value(&format!("{}", dims.xpix));
         let _ = Frame::default().with_label("Height")
             .with_size(COL_WIDTH, ROW_HEIGHT);
         let mut height_input = IntInput::default().with_size(COL_WIDTH, ROW_HEIGHT);
         height_input.set_tooltip("set image height in pixels");
-        height_input.set_value(&format!("{}", DEFAULT_HEIGHT));
+        height_input.set_value(&format!("{}", dims.ypix));
         
         let _ = Frame::default().with_label("Zoom")
             .with_size(COL_WIDTH, ROW_HEIGHT);
@@ -127,7 +131,7 @@ impl ImgPane {
         ctrl.end();
         
         let scroll_region = Scroll::default().with_pos(COL_WIDTH, 0)
-            .with_size(DEFAULT_WIDTH, DEFAULT_HEIGHT)
+            .with_size(image_xpix, image_ypix)
             .with_type(ScrollType::Both);
         let mut image_frame = Frame::default().with_pos(0, 0);
         image_frame.set_color(Color::Black);
@@ -199,7 +203,7 @@ impl ImgPane {
                                     None
                                 } else { Some(n) },
                             };
-                            let ypix = match width_input.value().parse::<usize>() {
+                            let ypix = match height_input.value().parse::<usize>() {
                                 Err(e) => {
                                     eprintln!("Unable to parse image width: {}", &e);
                                     None
@@ -307,6 +311,11 @@ impl ImgPane {
             b.set_callback(cb);
         }
         
+        save_butt.set_callback({
+            let pipe = pipe.clone();
+            move |_| { pipe.send(Msg::SaveImage).unwrap(); }
+        });
+        
         ip
     }
     
@@ -330,6 +339,12 @@ impl ImgPane {
         self.im_frame.set_size(w, h);
         self.im_frame.set_image(Some(frame_img));
         self.win.redraw();
+        fltk::app::sleep(0.01);
+    }
+    
+    pub fn get_image(&self) -> (usize, usize, Vec<u8>) {
+        let immij = self.im_frame.image().unwrap();
+        (immij.w() as usize, immij.h() as usize, immij.to_rgb_data())
     }
 }
 

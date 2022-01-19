@@ -4,6 +4,7 @@ use std::sync::mpsc;
 
 use fltk::{
     prelude::*,
+    dialog,
     enums::{Color, Event, Key},
     window::DoubleWindow,
 };
@@ -51,6 +52,25 @@ pub fn setup_subwindow_behavior(w: &mut DoubleWindow) {
             }
         }
     });
+}
+
+pub fn pick_a_file(extension: &str) -> Option<String> {
+    let lc_ext = extension.to_ascii_lowercase();
+    let filter = format!("*{}\t*{}", &lc_ext, &extension.to_ascii_uppercase());
+    
+    let mut fname = match dialog::file_chooser(
+        "Name your image file:", &filter, ".", true
+    ) {
+        None => { return None; },
+        Some(f) => f,
+    };
+    
+    if fname.to_ascii_lowercase().ends_with(&lc_ext) {
+        return Some(fname);
+    }
+    
+    fname.push_str(extension);
+    Some(fname)
 }
 
 pub mod color;

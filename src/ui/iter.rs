@@ -105,8 +105,8 @@ static DEFAULT_COEFS: [[f64; 2]; 3] = [
     [1.0, 0.0],
 ];
 
-struct IterPane {
-    win:      DoubleWindow,
+pub struct IterPane {
+    //win:      DoubleWindow,
     selector: Choice,
     pm_a:     CoefSpecifier,
     pm_b:     CoefSpecifier,
@@ -249,7 +249,7 @@ impl IterPane {
         });
         
         IterPane {
-            win: w,
+            //win: w,
             selector: sel,
             pm_a: a,
             pm_b: b,

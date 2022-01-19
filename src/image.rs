@@ -77,7 +77,7 @@ impl RGB {
         }
         
         let nf = colors.len() as f32;
-        RGB::new(rtot/nf, gtot/nf, btot)
+        RGB::new(rtot/nf, gtot/nf, btot/nf)
     }
     
     pub const BLACK:  RGB = RGB { r: 0.0, g: 0.0, b: 0.0 };
@@ -97,7 +97,7 @@ pub struct ImageDims {
     pub ypix: usize,
     pub x: f64,
     pub y: f64,
-    pub width: f64
+    pub width: f64,
 }
 
 impl ImageDims {
@@ -110,7 +110,7 @@ impl ImageDims {
     pub fn center(&self) -> (f64, f64) {
         (
             self.x + self.width / 2.0,
-            self.y + self.height() / 2.0,
+            self.y - self.height() / 2.0,
         )
     }
     
@@ -160,6 +160,23 @@ impl ImageDims {
                 y: n_y,
                 width: self.width,
             }
+        }
+    }
+    
+    /**
+    Return a new view with the center at new specified position:
+    `x_frac` of the way across the image, `y_frac` of the way down it.
+    */
+    pub fn recenter(&self, x_frac: f64, y_frac: f64) -> ImageDims {
+        let (xof, yof) = (x_frac - 0.5, y_frac - 0.5);
+        let (xo, yo) = (xof * self.width, yof * self.height());
+        let (nx, ny) = (self.x + xo, self.y - yo);
+        ImageDims {
+            xpix: self.xpix,
+            ypix: self.ypix,
+            x: nx,
+            y: ny,
+            width: self.width,
         }
     }
 }
@@ -264,8 +281,8 @@ impl FImage32 {
     }
     
     fn to_rgb8_scaled(&self, ratio: usize) -> (usize, usize, Vec<u8>) {
-        let pix_lines = self.dims.xpix / ratio;
-        let pix_cols  = self.dims.ypix / ratio;
+        let pix_lines = self.dims.ypix / ratio;
+        let pix_cols  = self.dims.xpix / ratio;
         let n_pix     = pix_lines * pix_cols;
         let mut rgb8_data: Vec<u8> = Vec::with_capacity(n_pix * 3);
         let mut palette: [RGB; SCALE_PALETTE_SIZE]
@@ -431,7 +448,7 @@ impl IterMapChunk {
         
         for yp in self.y_start..(self.y_start + self.n_rows) {
             let y_frac = (yp as f64) / f_ypix;
-            let y = self.dims.y - (y_frac + height);
+            let y = self.dims.y - (y_frac * height);
             for xp in 0..self.dims.xpix {
                 let x_frac = (xp as f64) / f_xpix;
                 let x = self.dims.x + (x_frac * self.dims.width);
@@ -526,6 +543,9 @@ impl IterMap {
         while done_chunks.len() < n_chunks {
             if active_threads < *N_THREADS {
                 if let Some(mut imc) = to_process.pop() {
+                    #[cfg(debug_assertions)]
+                    println!("chunk -> (y_start: {}, n_rows: {}, pixels: {})",
+                                imc.y_start, imc.n_rows, imc.data.len());
                     let txc = tx.clone();
                     thread::spawn(move || {
                         imc.iterate(limit);
@@ -536,6 +556,9 @@ impl IterMap {
             }
             if active_threads == *N_THREADS || to_process.len() == 0 {
                 let imc = rx.recv().unwrap();
+                #[cfg(debug_assertions)]
+                println!("<- chunk (y_start: {}, n_rows: {}, pixels: {})",
+                            imc.y_start, imc.n_rows, imc.data.len());
                 active_threads -= 1;
                 done_chunks.push(imc);
             }
@@ -552,6 +575,9 @@ impl IterMap {
     }
     
     pub fn reiterate(&mut self, limit: usize) {
+        #[cfg(debug_assertions)]
+        println!("reiteration! {}", limit);
+        
         if limit <= self.limit { return; }
         
         let n_chunks = self.chunks.len();

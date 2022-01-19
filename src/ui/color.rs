@@ -234,7 +234,7 @@ impl GradientChooser {
     }
     
     pub fn get_win(&self) -> &DoubleWindow { &self.win }
-    pub fn get_mut_win(&mut self) -> &mut DoubleWindow { &mut self.win }
+    //pub fn get_mut_win(&mut self) -> &mut DoubleWindow { &mut self.win }
     pub fn set_pos(&mut self, x: i32, y: i32) { self.win.set_pos(x, y); }
     pub fn show(&mut self) { self.win.show(); }
     
