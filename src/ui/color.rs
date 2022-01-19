@@ -1,3 +1,11 @@
+/*!
+The pane for specifying the `ColorMap`, attendant functionality, and
+some functions to facilitate choosing colors.
+*/
+
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+use std::sync::mpsc;
 
 use fltk::{
     prelude::*,
@@ -12,18 +20,23 @@ use fltk::{
 use crate::image::*;
 use super::*;
 
-const PICKER_LABEL_WIDTH: i32 = 24;
+// The following constants all express dimensions of elements of the color
+// picker window created by `pick_color()`.
+const PICKER_LABEL_WIDTH:  i32 = 24;
 const PICKER_SLIDER_WIDTH: i32 = 256;
-const PICKER_INPUT_WIDTH: i32 = 48;
-const PICKER_ROW_HEIGHT: i32 = 32;
+const PICKER_INPUT_WIDTH:  i32 = 48;
+const PICKER_ROW_HEIGHT:   i32 = 32;
 const PICKER_OUTPUT_WIDTH: i32 = 4 * PICKER_ROW_HEIGHT;
 
-const PICKER_ROW_WIDTH: i32 = PICKER_LABEL_WIDTH + PICKER_SLIDER_WIDTH
-                            + PICKER_INPUT_WIDTH;
-const PICKER_WINDOW_WIDTH: i32 = PICKER_ROW_WIDTH + PICKER_OUTPUT_WIDTH;
+const PICKER_ROW_WIDTH:     i32 = PICKER_LABEL_WIDTH + PICKER_SLIDER_WIDTH
+                                + PICKER_INPUT_WIDTH;
+const PICKER_WINDOW_WIDTH:  i32 = PICKER_ROW_WIDTH + PICKER_OUTPUT_WIDTH;
 const PICKER_WINDOW_HEIGHT: i32 = PICKER_ROW_HEIGHT * 4;
-const PICKER_BUTTON_WIDTH: i32 = PICKER_ROW_WIDTH / 2;
+const PICKER_BUTTON_WIDTH:  i32 = PICKER_ROW_WIDTH / 2;
 
+// This function only exists to save typing in the implementation of
+// `pick_color()`. There are three nearly-identical rows of widgets in the
+// color picker window; this abstracts creating them.
 fn make_picker_row(
     ypos: i32,
     label: &'static str,
@@ -92,6 +105,9 @@ fn make_picker_row(
     (lab, slider, vinput)
 }
 
+/**
+Pops up a modal window for selecting a color.
+*/
 pub fn pick_color(start: RGB) -> Option<RGB> {
     
     let rvalue: Rc<Cell<RGB>> = Rc::new(Cell::new(start));
@@ -152,15 +168,14 @@ pub fn pick_color(start: RGB) -> Option<RGB> {
     None
 }
 
-//
-// GRADIENT CHOOSER
-//
-
+// The following constants all specify dimensions of the `GradientChooser`
+// widget wrapper's UI elements.
 const GRADIENT_BUTTON_WIDTH: i32 = 32;
 const GRADIENT_ROW_HEIGHT:   i32 = 32;
 const GRADIENT_STEPS_WIDTH:  i32 = 64;
 const GRADIENT_ROW_WIDTH:    i32 = (2 * GRADIENT_BUTTON_WIDTH) + GRADIENT_STEPS_WIDTH;
 
+// Wraps some UI elements for specifying a `Gradient`.
 struct GradientChooser {
     win:         DoubleWindow,
     start_color: Rc<Cell<RGB>>,
@@ -169,6 +184,8 @@ struct GradientChooser {
 }
 
 impl GradientChooser {
+    // Create a new `GradientChooser` that initially displays parameters
+    // for the supplied `Gradient`.
     fn new(g: Gradient) -> GradientChooser {
         let w = DoubleWindow::default()
             .with_size(GRADIENT_ROW_WIDTH, GRADIENT_ROW_HEIGHT);
@@ -233,11 +250,16 @@ impl GradientChooser {
         }
     }
     
+    // Return a reference to the wrapped group of UI elements, so they
+    // can be added to groups of widgets.
     pub fn get_win(&self) -> &DoubleWindow { &self.win }
-    //pub fn get_mut_win(&mut self) -> &mut DoubleWindow { &mut self.win }
+    // Set the position of the underlying UI group in its containing group.
     pub fn set_pos(&mut self, x: i32, y: i32) { self.win.set_pos(x, y); }
+    // Show the underlying group. I'm honestly not totally sure why this
+    // call is necessary, and its necessity seems to be platform-dependent.
     pub fn show(&mut self) { self.win.show(); }
     
+    // Return the specified gradient.
     pub fn get_gradient(&self) -> Gradient {
         Gradient {
             start: self.start_color.get(),
@@ -247,12 +269,14 @@ impl GradientChooser {
     }
 }
 
-//
-// COLOR PANE
-//
-
+// The calculated width of the `ColorPane`'s window.
 const COLOR_PANE_WIDTH: i32 = (4 * GRADIENT_BUTTON_WIDTH) + GRADIENT_STEPS_WIDTH;
 
+// The `ColorPaneGuts` holds the `ColorPane`'s window and other UI
+// elements. It also must hold a reference to itself, which is a little
+// wonky and probably an anti-pattern. It only exists so that the constructor
+// for the public interface to this stuff, the `ColorPane` can just return a
+// plain struct instead of an `Rc<RefCell<Self>>`.
 struct ColorPaneGuts {
     choosers: Vec<GradientChooser>,
     win: DoubleWindow,
@@ -284,6 +308,8 @@ impl ColorPaneGuts {
         pg
     }
     
+    // Every time a gradient chooser is added or removed, the window
+    // needs to be resized/redrawn.
     fn redraw(&mut self) {
         for ch in self.choosers.iter() {
             self.win.remove(ch.get_win());
@@ -365,6 +391,9 @@ impl ColorPaneGuts {
         });
     }
     
+    // Insert a new `GradientChooser` at position `n`. If `n` is larger
+    // than the current `Vec` of `GradientChooser`s, it will just be
+    // appended. This behavor is relied upon.
     fn insert(&mut self, n: usize) {
         let (new_start, new_end): (RGB, RGB);
         
@@ -393,7 +422,11 @@ impl ColorPaneGuts {
         self.redraw();
     }
     
+    // Append a `GradientChooser` to the end.
     fn append(&mut self) { self.insert(self.choosers.len()); }
+    
+    // Remove the `GradientChooser` at position `n`, if it exists; don't
+    // do anything (like crash) if it doesn't.
     fn remove(&mut self, n: usize) {
         if n < self.choosers.len() { 
             let ch = self.choosers.remove(n);
@@ -404,17 +437,23 @@ impl ColorPaneGuts {
     }
 }
 
+/**
+This struct holds and manages all the UI elements for specifying the
+image's `ColorMap`.
+*/
 pub struct ColorPane {
     guts: Rc<RefCell<ColorPaneGuts>>,
 }
 
 impl ColorPane {
+    /** Instantiate a new `ColorPane` with the provided specification. */
     pub fn new(new_gradients: Vec<Gradient>, default_color: RGB) -> ColorPane {
         let cpg = ColorPaneGuts::new(new_gradients, default_color);
         cpg.borrow_mut().redraw();
         ColorPane { guts: cpg }
     }
     
+    /** Get the `ColorSpec` currently specified by the `ColorPane`. */
     pub fn get_spec(&self) -> ColorSpec {
         let g = self.guts.borrow();
         ColorSpec::new(

@@ -18,9 +18,19 @@ lazy_static!{
 // will be considered to have "diverged" and will be colored the "default"
 // color.
 const SQ_MOD_LIMIT: f64 = 1.0e100;
-
+// The number of chunks per physical computer core each `Itermap` will be
+// split into for parallel processing. Larger values will result in less
+// idle time due to different image chunks taking differnt amounts of time
+// to process, but will also incur more thread spawning/switching overhead.
+// I haven't done any profiling around this value, and I'm sure the "best"
+// value is highly situation-dependent.
 const CHUNKS_PER_THREAD: usize = 2;
+// The largest factor by which an `FImage32` will scale itself when generating
+// an 8-bit representation of itself. This is hard-coded so the hot loop
+// of the scaling algorithm can use the stack.
 const MAX_SCALE_FACTOR: usize = 5;
+// Calculated value for the size of the stack-allocated array used for
+// scaling-down `FImage32` pixels.
 const SCALE_PALETTE_SIZE: usize = MAX_SCALE_FACTOR * MAX_SCALE_FACTOR;
 
 /**
@@ -181,6 +191,7 @@ impl ImageDims {
     }
 }
 
+/** Specifies a single gradient in a `ColorMap`. */
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Gradient { pub start: RGB, pub end: RGB, pub steps: usize }
 
@@ -190,6 +201,13 @@ impl Default for Gradient {
     }
 }
 
+/**
+Specifies a `ColorMap`.
+
+A `ColorMap` is relatively large and requires some computation to
+produce; this is a much lighter struct to generate/retain/compare.
+An actual `ColorMap` can be produced when needed.
+*/
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColorSpec {
     gradients: Vec<Gradient>,
@@ -198,6 +216,8 @@ pub struct ColorSpec {
 }
 
 impl ColorSpec {
+    /** Collect some `Gradient`s and a default color together to produce
+    a spec. */
     pub fn new(gradients: Vec<Gradient>, default: RGB) -> ColorSpec {
         let length = gradients.iter().map(|g| g.steps).sum();
         
@@ -208,20 +228,31 @@ impl ColorSpec {
         }
     }
     
+    /** Return the number of steps the resultant `ColorMap` will have */
     pub fn len(&self) -> usize { self.length }
     
+    /** Do the work to turn me into an actual `ColorMap`. */
     pub fn to_map(self) -> ColorMap { ColorMap::make(self) }
 }
 
+
+/**
+The `ColorMap` holds the vector of colors required to turn an `IterMap`
+into a colored image. Its `.get(n)` method will return the `RGB` color
+that a point taking `n` iterations to diverge should be colored. (If
+`n` is greater than the length of the map, it will return the `default`.)
+*/
 #[derive(Clone, Debug)]
 pub struct ColorMap {
-    spec: ColorSpec,
     colors: Vec<RGB>,
+    default: RGB,
 }
 
 impl ColorMap {
+    /** Gobble up a `ColorSpec` and calculate the vector of colors. */
     pub fn make(spec: ColorSpec) -> ColorMap {
         let mut colors: Vec<RGB> = Vec::with_capacity(spec.length);
+        let default = spec.default;
         
         for grad in spec.gradients.iter() {
             let dr = grad.end.r - grad.start.r;
@@ -239,25 +270,36 @@ impl ColorMap {
             }
         }
         
-        ColorMap { spec, colors }
+        ColorMap { colors, default }
     }
     
-    pub fn len(&self) -> usize { self.spec.length }
+    /**
+    Return the total number of steps in the `ColorMap`.
     
+    This information is useful for constraining the iterator so it doesn't
+    run forever.
+    */
+    pub fn len(&self) -> usize { self.colors.len() }
+    
+    /**
+    Return the `RGB` color that a point requiring `n` steps to diverge
+    should be colored.
+    */
     pub fn get(&self, n: usize) -> RGB {
         match self.colors.get(n) {
             Some(c) => *c,
-            None => self.spec.default,
+            None => self.default,
         }
     }
 }
 
-impl PartialEq for ColorMap {
-    fn eq(&self, other: &Self) -> bool {
-        self.spec == other.spec
-    }
-}
+/**
+And image with each pixels specified by a 32-bit floating-point `RGB`
+triplet.
 
+This takes up a lot of space, but is a format conventient for making
+calculations.
+*/
 pub struct FImage32 {
     dims: ImageDims,
     data: Vec<RGB>,
@@ -268,6 +310,11 @@ impl FImage32 {
     pub fn ypix(&self) -> usize { self.dims.ypix }
     pub fn pixels(&self) -> &[RGB] { &self.data }
     
+    // Translate the color values directly to 8-bit RGB.
+    //
+    // This method is equivalent to calling `.to_rgb8_scaled(1)`, but requires
+    // a lot less calculation because we're not going through the song and
+    // dance of "averaging" squares of 1 by 1 pixels.
     fn to_rgb8_full_resolution(&self) -> Vec<u8> {
         let n_pix = self.dims.xpix * self.dims.ypix;
         let mut rgb8_data: Vec<u8> = Vec::with_capacity(n_pix * 3);
@@ -280,6 +327,9 @@ impl FImage32 {
     rgb8_data
     }
     
+    // Translate the color values to 8-bit RGB, but scaled down by a
+    // factor of 1/`ratio`. Each pixel value will be calculated by
+    // averaging a `ratio` by `ratio` square of pixels.
     fn to_rgb8_scaled(&self, ratio: usize) -> (usize, usize, Vec<u8>) {
         let pix_lines = self.dims.ypix / ratio;
         let pix_cols  = self.dims.xpix / ratio;
@@ -310,6 +360,13 @@ impl FImage32 {
         (pix_cols, pix_lines, rgb8_data)
     }
     
+    /**
+    Return the image data as a vector of 8-bit RGB color triples, scaled
+    down by a factor of `scale_factor` (a value of 1 will produce a
+    fill-sized image).
+    
+    This is the data format that most external things like.
+    */
     pub fn to_rgb8(&self, scale_factor: usize) -> (usize, usize, Vec::<u8>) {
         if scale_factor < 2 {
             (
@@ -492,7 +549,13 @@ impl IterMapChunk {
     }
 }
 
+/**
+Represents an "iteration map", that is, a mapping from each pixel in an
+image to how many iterations the associated point takes to diverge.
 
+This structure, combined with a `ColorMap` is all the information needed
+to produce an image.
+*/
 pub struct IterMap {
     dims: ImageDims,
     itertype: IterType,
@@ -501,6 +564,7 @@ pub struct IterMap {
 }
 
 impl IterMap {
+    /** Generate a new `IterMap` from the given information. */
     pub fn new(
         dims: ImageDims,
         itertype: IterType,
@@ -574,6 +638,15 @@ impl IterMap {
         }
     }
     
+    /**
+    Extend the current `IterMap` to more steps.
+    
+    This is useful if the image dimensions and iteration parameters haven't
+    changed, but there's a new target `ColorMap` that's of longer length.
+    
+    This method will grovel through all the points in the `IterMap` and
+    re-iterate only those who have the previous maximum value.
+    */
     pub fn reiterate(&mut self, limit: usize) {
         #[cfg(debug_assertions)]
         println!("reiteration! {}", limit);

@@ -1,6 +1,9 @@
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-use std::sync::mpsc;
+/*!
+Various user interface elements and functionality.
+
+This module is further split up into submodules that govern the behavior
+of each of the application's three windows.
+*/
 
 use fltk::{
     prelude::*,
@@ -11,11 +14,20 @@ use fltk::{
 
 use crate::image::RGB;
 
+/** Convert an `RGB` struct to an `fltk::enums::Color` value. */
 pub fn rgb_to_fltk(c: RGB) -> Color {
     let v = c.to_rgb8();
     Color::from_rgb(v[0], v[1], v[2])
 }
 
+/**
+Makes some changes to the way an `fltk::window::DoubleWindow` behaves in
+order to conform more closely to desired UI behavior.
+
+It removes the "borders", but then sets the window so it can still be
+dragged around by clicking on inactive parts. It also prevents the window
+from closing when the user hits `esc` when the window is focused.
+*/
 pub fn setup_subwindow_behavior(w: &mut DoubleWindow) {
     w.handle({
         let (mut wx, mut wy) : (i32, i32) = (w.x(), w.y());
@@ -54,6 +66,10 @@ pub fn setup_subwindow_behavior(w: &mut DoubleWindow) {
     });
 }
 
+/**
+Pops up an `fltk` file chooser dialog to specify a file name and ensures
+it ends with the supplied `extension`.
+*/
 pub fn pick_a_file(extension: &str) -> Option<String> {
     let lc_ext = extension.to_ascii_lowercase();
     let filter = format!("*{}\t*{}", &lc_ext, &extension.to_ascii_uppercase());
