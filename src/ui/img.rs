@@ -1,4 +1,7 @@
-
+/*!
+This module contains the structs and methods required for the pane that
+displays the image and controls navigation and zooming.
+*/
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -16,13 +19,32 @@ use fltk::{
 
 use super::*;
 
+/**
+the ImgPane (or one of its elemnts) will emit a `Msg` whenever a user action
+would cause some aspect of the image or its color map to be recalculated and
+redisplayed.
+*/
 #[derive(Clone, Copy, Debug)]
 pub enum Msg {
+    /// The user pushes one of the "Nudge" buttons. The values emitted are
+    /// horzontal and vertical distance in pixels to nudge the image. This
+    /// will get translated to a distance on the complex plane, which is
+    /// why floats are okay.
     Nudge(f64, f64),
+    /// The user clicks on the image in order to recenter it. The values
+    /// emitted are the horizontal/vertical locations of the click as
+    /// fractions of the width/height of the image.
     Recenter(f64, f64),
+    /// The user just hits the return key. Values emited are values from
+    /// the "Width" and "Height" inputs, if valid.
     Redraw(Option<usize>, Option<usize>),
+    /// The user clicks the "save image" button.
     SaveImage,
+    /// The user clicks one of the scale radio butons; the value emitted
+    /// is the scale ratio selected.
     Scale(usize),
+    /// The user zooms in/out. The value emitted is the value in the "Zoom"
+    /// input (if a zoom in) or its reciprocal (if a zoom out).
     Zoom(f64),
 }
 
@@ -36,6 +58,10 @@ const MIN_DIMENSION: usize = 16;
 const DEFAULT_ZOOM:   f64 = 2.0;
 const DEFAULT_NUDGE:  f64 = 10.0;
 
+/**
+The `ImgPane` is the main window of the application. It displays the actual
+image and features the controlls for navigation/zooming.
+*/
 pub struct ImgPane {
     win: DoubleWindow,
     im_frame: Frame,
@@ -43,6 +69,12 @@ pub struct ImgPane {
 }
 
 impl ImgPane {
+    /**
+    Instantiates a new `ImgPane` with the initial supplied `ImageDims`.
+    The `version` will be shown in the title bar of the window, and the
+    `pipe` is the sending end of the channel down which emittied messages
+    are to be sent.
+    */
     pub fn new(
         pipe: mpsc::Sender<Msg>,
         version: &str,
@@ -319,6 +351,12 @@ impl ImgPane {
         ip
     }
     
+    /**
+    Set the image to be displayed.
+    
+    Won't do anything if the dimensions passed don't match the length of
+    the data supplied.
+    */
     pub fn set_image(&mut self, xpix: usize, ypix: usize, data: Vec<u8>) {
         let npix = xpix * ypix;
         if npix *3 != data.len() {
@@ -342,6 +380,11 @@ impl ImgPane {
         fltk::app::sleep(0.01);
     }
     
+    /**
+    Get the data of the image displayed.
+    
+    This is just used to save the data (I think).
+    */
     pub fn get_image(&self) -> (usize, usize, Vec<u8>) {
         let immij = self.im_frame.image().unwrap();
         (immij.w() as usize, immij.h() as usize, immij.to_rgb_data())

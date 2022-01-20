@@ -1,3 +1,6 @@
+/*!
+The pane for specifying the `image::IterType` and attendant functionality.
+*/
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -17,8 +20,11 @@ use crate::cx::Cx;
 use crate::image::*;
 use super::*;
 
+// Labels that are mathematical variable symbols get typeset in this.
 const MATH_FONT: Font = Font::HelveticaItalic;
 
+// The following constants express dimensions of elements of the
+// `CoefSpecifier`
 const COEF_ROW_HEIGHT:   i32 = 32;
 const COEF_DEGREE_WIDTH: i32 = 48;
 const COEF_VAR_WIDTH:    i32 = 16;
@@ -26,6 +32,10 @@ const COEF_INPUT_WIDTH:  i32 = 72;
 const COEF_ROW_WIDTH:    i32 = COEF_DEGREE_WIDTH + (4 * COEF_VAR_WIDTH)
     + (2 * COEF_INPUT_WIDTH);
 
+/*
+A wrapped collection of UI elements for specifying a complex coefficient in
+polar form.
+*/
 struct CoefSpecifier {
     row: Pack,
     rinput: ValueInput,
@@ -33,6 +43,8 @@ struct CoefSpecifier {
 }
 
 impl CoefSpecifier {
+    // Construct a new `CoefSpecifier` with the given term label and initial
+    // values of `r` and `t`heta.
     pub fn new(term: &str, r: f64, t: f64) -> CoefSpecifier {
         let mut rw = Pack::default().with_size(COEF_ROW_WIDTH, COEF_ROW_HEIGHT);
         rw.set_type(PackType::Horizontal);
@@ -80,15 +92,20 @@ impl CoefSpecifier {
         }
     }
     
+    // Expose a reference to the underlying UI element group so that it
+    // can be added to other collections of elements.
     pub fn get_row(&self) -> &Pack { &self.row }
     pub fn get_mut_row(&mut self) -> &mut Pack { &mut self.row }
     
+    // Get the complex coefficient specified by.
     pub fn get_value(&self) -> Cx {
         let r = self.rinput.value();
         let t = self.tinput.value() * std::f64::consts::PI;
         Cx::polar(r, t)
     }
     
+    // An associated function for generating names for terms of a complex
+    // polynomial based on term degree.
     pub fn term_label(degree: usize) -> String {
         match degree {
             0 => "c".to_string(),
@@ -98,6 +115,7 @@ impl CoefSpecifier {
     }
 }
 
+// Specifying the sizes of the UI elements of the `IterPane`'s window.
 const COEF_BUTTON_WIDTH:        i32 = 32;
 const INITIAL_ITER_PANE_HEIGHT: i32 = COEF_ROW_HEIGHT * 12;
 const ITER_SELECTOR_WIDTH:      i32 = 192;
@@ -108,8 +126,11 @@ static DEFAULT_COEFS: [[f64; 2]; 3] = [
     [1.0, 0.0],
 ];
 
+/**
+This struct holds and manages the UI elements for specifying an image's
+`image::IterType`.
+*/
 pub struct IterPane {
-    //win:      DoubleWindow,
     selector: Choice,
     pm_a:     CoefSpecifier,
     pm_b:     CoefSpecifier,
@@ -117,6 +138,10 @@ pub struct IterPane {
 }
 
 impl IterPane {
+    /**
+    Instantiate a new `IterPane`. By default these have `IterType::Mandlebrot`
+    selected.
+    */
     pub fn new() -> IterPane {
         let mut w = DoubleWindow::default()
             .with_size(COEF_ROW_WIDTH, INITIAL_ITER_PANE_HEIGHT);
@@ -260,6 +285,7 @@ impl IterPane {
         }
     }
     
+    /**Return the `image::IterType` currently specified by the `IterPane`.*/
     pub fn get_itertype(&self) -> IterType {
         match self.selector.value() {
             0 => IterType::Mandlebrot,
