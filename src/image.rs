@@ -2,11 +2,13 @@
 Everything required for specifying and creating the bytes of an image.
 */
 
+use std::convert::{From, Into};
 use std::default::Default;
 use std::sync::mpsc;
 use std::thread;
 
 use lazy_static::lazy_static;
+use::serde_derive::{Serialize, Deserialize};
 
 use crate::cx::Cx;
 
@@ -38,7 +40,8 @@ Represents a color with red, green, and blue components as floating-point
 numbers in the range [0.0, 255.0]. This is the form in which it's easiest
 to do calculations. Includes a method for converting to hard-byte RGB format.
 */
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(from = "[f32; 3]", into = "[f32; 3]")]
 pub struct RGB { r: f32, g: f32, b: f32 }
 
 // For constraining the arguments to `RGB::new()` to the proper range.
@@ -94,6 +97,18 @@ impl RGB {
     pub const WHITE:  RGB = RGB { r: 255.0, g: 255.0, b: 255.0 };
 }
 
+impl From<[f32; 3]> for RGB {
+    fn from(a: [f32; 3]) -> RGB {
+        RGB { r: a[0], g: a[1], b: a[2] }
+    }
+}
+
+impl Into<[f32; 3]> for RGB {
+    fn into(self) -> [f32; 3] {
+        [self.r, self.g, self.b]
+    }
+}
+
 /**
 Represents a mapping from the pixels of an image to a view of the
 complex plane. `xpix` and `ypix` are the dimensions of the image in pixels,
@@ -101,7 +116,7 @@ complex plane. `xpix` and `ypix` are the dimensions of the image in pixels,
 the complex plane, and `width` is the horizontal size of the image on the
 complex plane.
 */
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImageDims {
     pub xpix: usize,
     pub ypix: usize,
@@ -192,8 +207,8 @@ impl ImageDims {
 }
 
 /** Specifies a single gradient in a `ColorMap`. */
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Gradient { pub start: RGB, pub end: RGB, pub steps: usize }
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Gradient { pub steps: usize, pub start: RGB, pub end: RGB }
 
 impl Default for Gradient {
     fn default() -> Self {
@@ -208,11 +223,11 @@ A `ColorMap` is relatively large and requires some computation to
 produce; this is a much lighter struct to generate/retain/compare.
 An actual `ColorMap` can be produced when needed.
 */
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ColorSpec {
-    gradients: Vec<Gradient>,
     length: usize,
     default: RGB,
+    gradients: Vec<Gradient>,
 }
 
 impl ColorSpec {
@@ -222,9 +237,9 @@ impl ColorSpec {
         let length = gradients.iter().map(|g| g.steps).sum();
         
         ColorSpec {
-            gradients,
             length,
             default,
+            gradients,
         }
     }
     
@@ -233,6 +248,9 @@ impl ColorSpec {
     
     /** Do the work to turn me into an actual `ColorMap`. */
     pub fn to_map(self) -> ColorMap { ColorMap::make(self) }
+    
+    pub fn default(&self) -> RGB { self.default }
+    pub fn gradients(self) -> Vec<Gradient> { self.gradients }
 }
 
 
@@ -244,8 +262,8 @@ that a point taking `n` iterations to diverge should be colored. (If
 */
 #[derive(Clone, Debug)]
 pub struct ColorMap {
-    colors: Vec<RGB>,
     default: RGB,
+    colors: Vec<RGB>,
 }
 
 impl ColorMap {
@@ -388,11 +406,12 @@ A type to fully describe the type of iteration to be used.
 This, combined with an iteration limit (the length of a target `ColorMap`)
 is all the information required for iterating a point.
 */
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum IterType {
     Mandlebrot,
-    PseudoMandlebrot(Cx, Cx),
-    Polynomial(Vec<Cx>),
+    PseudoMandlebrot{ a: Cx, b: Cx },
+    Polynomial{ coefs: Vec<Cx> },
 }
 
 /* Iterate a point using the Mandlebrot iterator. */
@@ -499,8 +518,8 @@ impl IterMapChunk {
         let height = self.dims.height();
         let f = match self.itertype.clone() {
             IterType::Mandlebrot => Box::new(mandlebrot_iterator),
-            IterType::PseudoMandlebrot(a, b) => pseudomandle_maker(a, b),
-            IterType::Polynomial(v) => polyiter_maker(v),
+            IterType::PseudoMandlebrot{ a, b } => pseudomandle_maker(a, b),
+            IterType::Polynomial{ coefs } => polyiter_maker(coefs),
         };
         
         for yp in self.y_start..(self.y_start + self.n_rows) {
@@ -526,8 +545,8 @@ impl IterMapChunk {
         let height = self.dims.height();
         let f = match self.itertype.clone() {
             IterType::Mandlebrot => Box::new(mandlebrot_iterator),
-            IterType::PseudoMandlebrot(a, b) => pseudomandle_maker(a, b),
-            IterType::Polynomial(v) => polyiter_maker(v),
+            IterType::PseudoMandlebrot{ a, b } => pseudomandle_maker(a, b),
+            IterType::Polynomial{ coefs } => polyiter_maker(coefs),
         };
         
         let mut idx: usize = 0;

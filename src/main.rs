@@ -7,10 +7,11 @@ use std::sync::mpsc;
 use fltk::dialog;
 
 use jset_desk::image::*;
+use jset_desk::rw;
 use jset_desk::ui;
 use jset_desk::ui::img::Msg;
 
-const VERSION: &str = "0.2.0 beta";
+const VERSION: &str = "0.2.1 beta";
 
 struct Globs {
     iter_pane: ui::iter::IterPane,
@@ -181,10 +182,9 @@ fn main() {
     let a = fltk::app::App::default();
 
     let mut main_pane = ui::img::ImgPane::new(sndr, VERSION, dims);
-    let colr_pane = ui::color::ColorPane::new(
-        vec![Gradient::default()], RGB::WHITE,
-    );
-    let iter_pane = ui::iter::IterPane::new();
+    let initial_spec = ColorSpec::new(vec![Gradient::default()], RGB::WHITE);
+    let colr_pane = ui::color::ColorPane::new(initial_spec);
+    let mut iter_pane = ui::iter::IterPane::new(IterType::Mandlebrot);
     
     let color_spec = colr_pane.get_spec();
     let color_map  = ColorMap::make(color_spec.clone());
@@ -216,6 +216,22 @@ fn main() {
             #[cfg(debug_assertions)]
             println!("{:?}", &message);
             match message {
+                Msg::Load => {
+                    let fname = match ui::pick_a_file(".toml") {
+                        Some(f) => f,
+                        None => { continue; }
+                    };
+                    match rw::load(fname) {
+                        Err(e) => dialog::message_default(
+                                    &format!("Error loading file: {}", &e)
+                                  ),
+                        Ok((dims, cspec, itype)) => {
+                            globs.colr_pane.respec(cspec);
+                            globs.iter_pane = ui::iter::IterPane::new(itype);
+                            globs.recheck_and_redraw(dims);
+                        },
+                    }
+                },
                 Msg::Nudge(fxpix, fypix) => {
                     let mut dims = globs.cur_dims;
                     let xfrac = fxpix/(dims.xpix as f64);
@@ -249,6 +265,20 @@ fn main() {
                         dialog::message_default(
                             &format!("Error saving file: {}", &e)
                         );
+                    }
+                },
+                Msg::SaveValues => {
+                    let fname = match ui::pick_a_file(".toml") {
+                        Some(f) => f,
+                        None => { continue; },
+                    };
+                    if let Err(estr) = rw::save(
+                        &globs.cur_dims,
+                        &globs.cur_spec,
+                        &globs.cur_iter,
+                        &fname
+                    ) {
+                        dialog::message_default(&estr);
                     }
                 },
                 Msg::Scale(n) => {

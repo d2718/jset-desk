@@ -26,6 +26,8 @@ redisplayed.
 */
 #[derive(Clone, Copy, Debug)]
 pub enum Msg {
+    /// When the user clicks the "Load" button.
+    Load,
     /// The user pushes one of the "Nudge" buttons. The values emitted are
     /// horzontal and vertical distance in pixels to nudge the image. This
     /// will get translated to a distance on the complex plane, which is
@@ -40,6 +42,8 @@ pub enum Msg {
     Redraw(Option<usize>, Option<usize>),
     /// The user clicks the "save image" button.
     SaveImage,
+    /// The user clicks the "save values" button.
+    SaveValues,
     /// The user clicks one of the scale radio butons; the value emitted
     /// is the scale ratio selected.
     Scale(usize),
@@ -50,7 +54,7 @@ pub enum Msg {
 
 const COL_WIDTH:   i32 = 72;
 const ROW_HEIGHT:  i32 = 24;
-const COL_HEIGHT:  i32 = ROW_HEIGHT * 20;
+const COL_HEIGHT:  i32 = ROW_HEIGHT * 22;
 const HALF_BUTTON: i32 = COL_WIDTH / 2;
 const N_SCALERS: usize = 5;
 const MIN_DIMENSION: usize = 16;
@@ -159,6 +163,11 @@ impl ImgPane {
         
         let mut save_butt = Button::default().with_label("save\nimage")
             .with_size(COL_WIDTH, 2 * ROW_HEIGHT);
+        let mut remember_butt = Button::default().with_label("save\nvalues")
+            .with_size(COL_WIDTH, 2 * ROW_HEIGHT);
+        let _ = Frame::default().with_size(COL_WIDTH, ROW_HEIGHT); // spacer
+        let mut load_butt = Button::default().with_label("load")
+            .with_size(COL_WIDTH, ROW_HEIGHT);
         
         ctrl.end();
         
@@ -346,6 +355,14 @@ impl ImgPane {
         save_butt.set_callback({
             let pipe = pipe.clone();
             move |_| { pipe.send(Msg::SaveImage).unwrap(); }
+        });
+        remember_butt.set_callback({
+            let pipe = pipe.clone();
+            move |_| { pipe.send(Msg::SaveValues).unwrap(); }
+        });
+        load_butt.set_callback({
+            let pipe = pipe.clone();
+            move |_| { pipe.send(Msg::Load).unwrap(); }
         });
         
         ip

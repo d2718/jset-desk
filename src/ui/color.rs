@@ -435,6 +435,20 @@ impl ColorPaneGuts {
             DoubleWindow::delete(ch.win);
         }
     }
+    
+    // Remove all `GradientChoosers`.
+    fn clear(&mut self) {
+        loop {
+            match self.choosers.pop() {
+                Some(ch) => {
+                    self.win.remove(&ch.win);
+                    self.redraw();
+                    DoubleWindow::delete(ch.win);
+                },
+                None => { return; }
+            }
+        }
+    }
 }
 
 /**
@@ -447,8 +461,9 @@ pub struct ColorPane {
 
 impl ColorPane {
     /** Instantiate a new `ColorPane` with the provided specification. */
-    pub fn new(new_gradients: Vec<Gradient>, default_color: RGB) -> ColorPane {
-        let cpg = ColorPaneGuts::new(new_gradients, default_color);
+    pub fn new(spec: ColorSpec) -> ColorPane {
+        let def = spec.default();
+        let cpg = ColorPaneGuts::new(spec.gradients(), def);
         cpg.borrow_mut().redraw();
         ColorPane { guts: cpg }
     }
@@ -460,6 +475,18 @@ impl ColorPane {
             g.choosers.iter().map(|ch| ch.get_gradient()).collect(),
             g.default_color
         )
+    }
+    
+    pub fn respec(&mut self, new_spec: ColorSpec) {
+        let new_default = new_spec.default();
+        let mut g = self.guts.borrow_mut();
+        g.default_color = new_default;
+        g.clear();
+        for grad in new_spec.gradients().into_iter() {
+            let gc = GradientChooser::new(grad);
+            g.choosers.push(gc);
+        }
+        g.redraw();
     }
 }
 

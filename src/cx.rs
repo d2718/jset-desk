@@ -8,7 +8,10 @@ and accessors to get _|z|_ and _𝜑(z)_.
 
 use std::ops::{Add, Mul, Neg};
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+use::serde_derive::{Serialize, Deserialize};
+
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(from = "[f64; 2]", into = "[f64; 2]")]
 pub struct Cx { pub re: f64, pub im: f64 }
 
 impl Cx {
@@ -54,5 +57,17 @@ impl Neg for Cx {
     
     fn neg(self) -> Self::Output {
         Cx { re: -self.re, im: - self.im }
+    }
+}
+
+impl From<[f64; 2]> for Cx {
+    fn from(a: [f64; 2]) -> Cx {
+        Cx { re: a[0], im: a[1] }
+    }
+}
+
+impl Into<[f64; 2]> for Cx {
+    fn into(self) -> [f64; 2] {
+        [self.re, self.im]
     }
 }

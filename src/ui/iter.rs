@@ -3,6 +3,7 @@ The pane for specifying the `image::IterType` and attendant functionality.
 */
 
 use std::cell::RefCell;
+use std::f64::consts::PI;
 use std::rc::Rc;
 
 use fltk::{
@@ -100,7 +101,7 @@ impl CoefSpecifier {
     // Get the complex coefficient specified by.
     pub fn get_value(&self) -> Cx {
         let r = self.rinput.value();
-        let t = self.tinput.value() * std::f64::consts::PI;
+        let t = self.tinput.value() * PI;
         Cx::polar(r, t)
     }
     
@@ -131,6 +132,7 @@ This struct holds and manages the UI elements for specifying an image's
 `image::IterType`.
 */
 pub struct IterPane {
+    win:      DoubleWindow,
     selector: Choice,
     pm_a:     CoefSpecifier,
     pm_b:     CoefSpecifier,
@@ -142,7 +144,7 @@ impl IterPane {
     Instantiate a new `IterPane`. By default these have `IterType::Mandlebrot`
     selected.
     */
-    pub fn new() -> IterPane {
+    pub fn new(initial_state: IterType) -> IterPane {
         let mut w = DoubleWindow::default()
             .with_size(COEF_ROW_WIDTH, INITIAL_ITER_PANE_HEIGHT);
         w.set_border(false);
@@ -154,7 +156,11 @@ impl IterPane {
             .with_size(ITER_SELECTOR_WIDTH, COEF_ROW_HEIGHT)
             .with_pos(COEF_ROW_WIDTH - ITER_SELECTOR_WIDTH, COEF_ROW_HEIGHT);
         sel.add_choice("Mandlebrot|Pseudo-Mandlebrot|Polynomial");
-        sel.set_value(0);
+        match &initial_state {
+            &IterType::Mandlebrot => sel.set_value(0),
+            &IterType::PseudoMandlebrot{ a: _, b: _ } => sel.set_value(1),
+            &IterType::Polynomial{ coefs: _ } => sel.set_value(2),
+        };
         
         let mut pw = DoubleWindow::default()
             .with_size(COEF_ROW_WIDTH, 3 * COEF_ROW_HEIGHT)
@@ -162,9 +168,23 @@ impl IterPane {
         let mut pw_label = Frame::default().with_pos(0, 0)
             .with_size(COEF_ROW_WIDTH, COEF_ROW_HEIGHT).with_label("az^2 + bc");
         pw_label.set_label_font(MATH_FONT);
-        let mut a = CoefSpecifier::new("a", 1.0, 0.0);
+        let mut a: CoefSpecifier;
+        let mut b: CoefSpecifier;
+        match &initial_state {
+            &IterType::PseudoMandlebrot{ a: aref, b: bref } => {
+                let r = aref.r();
+                let t = aref.theta() / PI;
+                a = CoefSpecifier::new("a", r, t);
+                let r = bref.r();
+                let t = bref.theta() / PI;
+                b = CoefSpecifier::new("b", r, t);
+            },
+            _ => {
+                a = CoefSpecifier::new("a", 1.0, 0.0);
+                b = CoefSpecifier::new("b", 1.0, 0.0);
+            },
+        }
         a.get_mut_row().set_pos(0, COEF_ROW_HEIGHT);
-        let mut b = CoefSpecifier::new("b", 1.0, 0.0);
         b.get_mut_row().set_pos(0, COEF_ROW_HEIGHT * 2);
         pw.end();
         pw.deactivate();
@@ -192,14 +212,29 @@ impl IterPane {
             .with_size(COEF_BUTTON_WIDTH, COEF_ROW_HEIGHT);
         coef_del.set_tooltip("remove the z^2 coefficient");
         
-        for n in 0usize..3 {
-            let mut c = CoefSpecifier::new(
-                &CoefSpecifier::term_label(n),
-                DEFAULT_COEFS[n][0],
-                DEFAULT_COEFS[n][1]
-            );
-            c.get_mut_row().set_pos(0, (n as i32 + 3) * COEF_ROW_HEIGHT);
-            cs.push(c);
+        match &initial_state {
+            &IterType::Polynomial{ coefs: ref v } => {
+                w.set_size(COEF_ROW_WIDTH, (v.len() as i32 + 9) * COEF_ROW_HEIGHT);
+                pyw.set_size(COEF_ROW_WIDTH, (v.len() as i32 + 4) * COEF_ROW_HEIGHT);
+                for (n, z) in v.iter().enumerate() {
+                    let mut c = CoefSpecifier::new(
+                        &CoefSpecifier::term_label(n),
+                        z.r(),
+                        z.theta() / PI
+                    );
+                    c.get_mut_row().set_pos(0, (n as i32 + 3) * COEF_ROW_HEIGHT);
+                    cs.push(c);
+                }
+            },
+            _ => for n in 0usize..3 {
+                let mut c = CoefSpecifier::new(
+                    &CoefSpecifier::term_label(n),
+                    DEFAULT_COEFS[n][0],
+                    DEFAULT_COEFS[n][1]
+                );
+                c.get_mut_row().set_pos(0, (n as i32 + 3) * COEF_ROW_HEIGHT);
+                cs.push(c);
+            },
         }
         pyw.end();
         pyw.deactivate();
@@ -221,6 +256,7 @@ impl IterPane {
                 n @ _ => { eprintln!("IterPane::selector callback illegal value: {}", n); },
             }
         });
+        sel.do_callback();
         
         coef_del.set_callback({
             let mut win = w.clone();
@@ -277,7 +313,7 @@ impl IterPane {
         });
         
         IterPane {
-            //win: w,
+            win: w,
             selector: sel,
             pm_a: a,
             pm_b: b,
@@ -289,13 +325,14 @@ impl IterPane {
     pub fn get_itertype(&self) -> IterType {
         match self.selector.value() {
             0 => IterType::Mandlebrot,
-            1 => IterType::PseudoMandlebrot(
-                self.pm_a.get_value(),
-                self.pm_b.get_value()
-            ),
-            2 => IterType::Polynomial(
-                self.coefs.borrow().iter().map(|c| c.get_value()).collect()
-            ),
+            1 => IterType::PseudoMandlebrot{
+                a: self.pm_a.get_value(),
+                b: self.pm_b.get_value()
+            },
+            2 => IterType::Polynomial{
+                coefs: self.coefs.borrow().iter()
+                    .map(|c| c.get_value()).collect()
+            },
             n @ _ => {
                 eprintln!("IterPane::get_itertype(): illegal selector value: {}", &n);
                 IterType::Mandlebrot
@@ -304,6 +341,15 @@ impl IterPane {
     }
 }
 
+impl Drop for IterPane {
+    fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        println!("dropping IterPane");
+        
+        let w = self.win.clone();
+        DoubleWindow::delete(w);
+    }
+}
 
 #[cfg(test)]
 mod test {
