@@ -174,7 +174,7 @@ impl ImgPane {
         let scroll_region = Scroll::default().with_pos(COL_WIDTH, 0)
             .with_size(image_xpix, image_ypix)
             .with_type(ScrollType::Both);
-        let mut image_frame = Frame::default().with_pos(0, 0);
+        let mut image_frame = Frame::default().with_pos(COL_WIDTH, 0);
         image_frame.set_color(Color::Black);
         scroll_region.end();
         

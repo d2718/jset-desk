@@ -12,6 +12,7 @@ use jset_desk::ui;
 use jset_desk::ui::img::Msg;
 
 const VERSION: &str = "0.2.1 beta";
+const X_CLASS: &str = "JSet-Desktop";
 
 struct Globs {
     iter_pane: ui::iter::IterPane,
@@ -170,6 +171,8 @@ fn save_file(xpix: usize, ypix: usize, data: &[u8]) -> std::io::Result<()> {
 }
 
 fn main() {
+    fltk::window::DoubleWindow::set_default_xclass(X_CLASS);
+    
     let (sndr, rcvr) = mpsc::channel::<ui::img::Msg>();
     let dims = ImageDims {
         xpix: 900,
@@ -184,7 +187,7 @@ fn main() {
     let mut main_pane = ui::img::ImgPane::new(sndr, VERSION, dims);
     let initial_spec = ColorSpec::new(vec![Gradient::default()], RGB::WHITE);
     let colr_pane = ui::color::ColorPane::new(initial_spec);
-    let mut iter_pane = ui::iter::IterPane::new(IterType::Mandlebrot);
+    let iter_pane = ui::iter::IterPane::new(IterType::Mandlebrot);
     
     let color_spec = colr_pane.get_spec();
     let color_map  = ColorMap::make(color_spec.clone());
@@ -291,5 +294,6 @@ fn main() {
                 },
             }
         }
+        
     }
 }
