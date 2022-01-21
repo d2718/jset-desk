@@ -55,10 +55,19 @@ In no particular order, I'd like to add:
   * saving natively in .png format. It's more complicated than just adding
     crate `png` as a dependency and calling a function, which I guess
     shouldn't be surprising.
-  * keyboard shortcuts to change pane focus. FLTK inputs really like to eat
+  * ~~keyboard shortcuts to change pane focus. FLTK inputs really like to eat
     key events. There has to be a way to do this, I just haven't figured
     out how because the `fltk-rs` documentation seems to assume you're
-    already intimately familiar with using the C++ library.
+    already intimately familiar with using the C++ library.~~ As of 0.2.2,
+      + `alt-A` will raise the iteration window
+      + `alt-z` will raise the color window
+      + `Return` will, if it's not raised, raise the main image window; if
+        it _is_raised, it will redraw the image. So when you make a change
+        to the color map or the iteration parameters, you can just hit
+        return twice to redraw the picture.
+    This isn't my first choice for how to do this, but it's something that
+    works and is moderately more convenient than having to click to focus
+    all the time. I may return to this in the future.
   * ~~saving the image, color, and iteration parameters to a file, (and
     subsequently loading them) so you can resume work on an image, or
     generate a super-high-rez version later if someone likes it. This should
