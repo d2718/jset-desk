@@ -287,13 +287,17 @@ struct ColorPaneGuts {
 impl ColorPaneGuts {
     fn new(
         new_gradients: Vec<Gradient>,
-        default_color: RGB
+        default_color: RGB,
+        pipe: mpsc::Sender<Msg>
     ) -> Rc<RefCell<ColorPaneGuts>> {
-        let mut w = DoubleWindow::default();
+        let (scrn_w, scrn_h) = fltk::app::screen_size();
+        let (scrn_w, scrn_h) = (scrn_w as i32, scrn_h as i32);
+        let mut w = DoubleWindow::default()
+            .with_pos(scrn_w - COLOR_PANE_WIDTH, scrn_h / 2);
         w.set_border(false);
         w.end();
         
-        setup_subwindow_behavior(&mut w);
+        setup_subwindow_behavior(&mut w, pipe);
         
         let pg = Rc::new(RefCell::new(ColorPaneGuts {
             choosers: new_gradients.iter()
@@ -461,9 +465,12 @@ pub struct ColorPane {
 
 impl ColorPane {
     /** Instantiate a new `ColorPane` with the provided specification. */
-    pub fn new(spec: ColorSpec) -> ColorPane {
+    pub fn new(
+        spec: ColorSpec,
+        pipe: mpsc::Sender<Msg>
+    ) -> ColorPane {
         let def = spec.default();
-        let cpg = ColorPaneGuts::new(spec.gradients(), def);
+        let cpg = ColorPaneGuts::new(spec.gradients(), def, pipe);
         cpg.borrow_mut().redraw();
         ColorPane { guts: cpg }
     }
@@ -487,6 +494,16 @@ impl ColorPane {
             g.choosers.push(gc);
         }
         g.redraw();
+    }
+    
+    /**
+    Raise pane to the top by hiding then showing its window. It seems
+    like there should be a more direct way to do this.
+    */
+    pub fn raise(&mut self) {
+        let w = &mut self.guts.borrow_mut().win;
+        w.hide();
+        w.show();
     }
 }
 

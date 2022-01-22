@@ -9,9 +9,10 @@ use fltk::dialog;
 use jset_desk::image::*;
 use jset_desk::rw;
 use jset_desk::ui;
-use jset_desk::ui::img::Msg;
+use jset_desk::ui::Msg;
 
-const VERSION: &str = "0.2.1 beta";
+const VERSION: &str = "0.2.2 beta";
+const X_CLASS: &str = "JSet-Desktop";
 
 struct Globs {
     iter_pane: ui::iter::IterPane,
@@ -170,7 +171,9 @@ fn save_file(xpix: usize, ypix: usize, data: &[u8]) -> std::io::Result<()> {
 }
 
 fn main() {
-    let (sndr, rcvr) = mpsc::channel::<ui::img::Msg>();
+    fltk::window::DoubleWindow::set_default_xclass(X_CLASS);
+    
+    let (sndr, rcvr) = mpsc::channel::<Msg>();
     let dims = ImageDims {
         xpix: 900,
         ypix: 600,
@@ -181,10 +184,10 @@ fn main() {
     
     let a = fltk::app::App::default();
 
-    let mut main_pane = ui::img::ImgPane::new(sndr, VERSION, dims);
+    let mut main_pane = ui::img::ImgPane::new(sndr.clone(), VERSION, dims);
     let initial_spec = ColorSpec::new(vec![Gradient::default()], RGB::WHITE);
-    let colr_pane = ui::color::ColorPane::new(initial_spec);
-    let mut iter_pane = ui::iter::IterPane::new(IterType::Mandlebrot);
+    let colr_pane = ui::color::ColorPane::new(initial_spec, sndr.clone());
+    let iter_pane = ui::iter::IterPane::new(IterType::Mandlebrot, sndr.clone());
     
     let color_spec = colr_pane.get_spec();
     let color_map  = ColorMap::make(color_spec.clone());
@@ -216,6 +219,15 @@ fn main() {
             #[cfg(debug_assertions)]
             println!("{:?}", &message);
             match message {
+                Msg::FocusColorPane => {
+                    globs.colr_pane.raise();
+                },
+                Msg::FocusIterPane => {
+                    globs.iter_pane.raise();
+                },
+                Msg::FocusMainPane => {
+                    globs.main_pane.raise();
+                },
                 Msg::Load => {
                     let fname = match ui::pick_a_file(".toml") {
                         Some(f) => f,
@@ -227,7 +239,7 @@ fn main() {
                                   ),
                         Ok((dims, cspec, itype)) => {
                             globs.colr_pane.respec(cspec);
-                            globs.iter_pane = ui::iter::IterPane::new(itype);
+                            globs.iter_pane = ui::iter::IterPane::new(itype, sndr.clone());
                             globs.recheck_and_redraw(dims);
                         },
                     }
@@ -291,5 +303,6 @@ fn main() {
                 },
             }
         }
+        
     }
 }

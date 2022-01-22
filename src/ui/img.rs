@@ -8,7 +8,7 @@ use std::sync::mpsc;
 
 use fltk::{
     button::{Button, RadioRoundButton},
-    enums::{Color, ColorDepth},
+    enums::{Color, ColorDepth, Key},
     frame::Frame,
     group::{Pack, PackType, Scroll, ScrollType},
     image::RgbImage,
@@ -18,39 +18,6 @@ use fltk::{
 };
 
 use super::*;
-
-/**
-the ImgPane (or one of its elemnts) will emit a `Msg` whenever a user action
-would cause some aspect of the image or its color map to be recalculated and
-redisplayed.
-*/
-#[derive(Clone, Copy, Debug)]
-pub enum Msg {
-    /// When the user clicks the "Load" button.
-    Load,
-    /// The user pushes one of the "Nudge" buttons. The values emitted are
-    /// horzontal and vertical distance in pixels to nudge the image. This
-    /// will get translated to a distance on the complex plane, which is
-    /// why floats are okay.
-    Nudge(f64, f64),
-    /// The user clicks on the image in order to recenter it. The values
-    /// emitted are the horizontal/vertical locations of the click as
-    /// fractions of the width/height of the image.
-    Recenter(f64, f64),
-    /// The user just hits the return key. Values emited are values from
-    /// the "Width" and "Height" inputs, if valid.
-    Redraw(Option<usize>, Option<usize>),
-    /// The user clicks the "save image" button.
-    SaveImage,
-    /// The user clicks the "save values" button.
-    SaveValues,
-    /// The user clicks one of the scale radio butons; the value emitted
-    /// is the scale ratio selected.
-    Scale(usize),
-    /// The user zooms in/out. The value emitted is the value in the "Zoom"
-    /// input (if a zoom in) or its reciprocal (if a zoom out).
-    Zoom(f64),
-}
 
 const COL_WIDTH:   i32 = 72;
 const ROW_HEIGHT:  i32 = 24;
@@ -87,7 +54,8 @@ impl ImgPane {
         let image_xpix = dims.xpix as i32;
         let image_ypix = dims.ypix as i32;
         let mut w = DoubleWindow::default()
-            .with_size(image_xpix + COL_WIDTH, image_ypix);
+            .with_size(image_xpix + COL_WIDTH, image_ypix)
+            .with_pos(0, 0);
         w.set_label(&format!("JSet-Desktop {}", version));
         w.set_border(true);
         w.make_resizable(true);
@@ -174,7 +142,7 @@ impl ImgPane {
         let scroll_region = Scroll::default().with_pos(COL_WIDTH, 0)
             .with_size(image_xpix, image_ypix)
             .with_type(ScrollType::Both);
-        let mut image_frame = Frame::default().with_pos(0, 0);
+        let mut image_frame = Frame::default().with_pos(COL_WIDTH, 0);
         image_frame.set_color(Color::Black);
         scroll_region.end();
         
@@ -262,7 +230,19 @@ impl ImgPane {
                             // won't quit.
                             true
                         },
-                        _ => false,
+                        A_KEY => {
+                            pipe.send(Msg::FocusIterPane).unwrap();
+                            true
+                        },
+                        Z_KEY => {
+                            pipe.send(Msg::FocusColorPane).unwrap();
+                            true
+                        },
+                        _k @ _ => {
+                            #[cfg(debug_assertions)]
+                            println!("{:?}", _k.to_char());
+                            false
+                        },
                     },
                     _ => false,
                 }
@@ -395,6 +375,11 @@ impl ImgPane {
         self.im_frame.set_image(Some(frame_img));
         self.win.redraw();
         fltk::app::sleep(0.01);
+    }
+    
+    pub fn raise(&mut self) {
+        self.win.hide();
+        self.win.show();
     }
     
     /**

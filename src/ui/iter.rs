@@ -144,9 +144,14 @@ impl IterPane {
     Instantiate a new `IterPane`. By default these have `IterType::Mandlebrot`
     selected.
     */
-    pub fn new(initial_state: IterType) -> IterPane {
+    pub fn new(
+        initial_state: IterType,
+        pipe: std::sync::mpsc::Sender<Msg>
+    ) -> IterPane {
+        let scrn_w = fltk::app::screen_size().0 as i32;
         let mut w = DoubleWindow::default()
-            .with_size(COEF_ROW_WIDTH, INITIAL_ITER_PANE_HEIGHT);
+            .with_size(COEF_ROW_WIDTH, INITIAL_ITER_PANE_HEIGHT)
+            .with_pos(scrn_w - COEF_ROW_WIDTH, 0);
         w.set_border(false);
         
         let _lab = Frame::default().with_label("Iterator Options")
@@ -242,7 +247,7 @@ impl IterPane {
         w.end();
         w.show();
         
-        setup_subwindow_behavior(&mut w);
+        setup_subwindow_behavior(&mut w, pipe);
         
         let cs = Rc::new(RefCell::new(cs));
         
@@ -319,6 +324,15 @@ impl IterPane {
             pm_b: b,
             coefs: cs,
         }
+    }
+    
+    /**
+    Raise pane to the top by hiding then showing its window. It seems
+    like there should be a more direct way to do this.
+    */
+    pub fn raise(&mut self) {
+        self.win.hide();
+        self.win.show();
     }
     
     /**Return the `image::IterType` currently specified by the `IterPane`.*/
