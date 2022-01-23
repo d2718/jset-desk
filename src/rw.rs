@@ -59,6 +59,24 @@ pub fn save<P: AsRef<Path>>(
     Ok(())
 }
 
+pub fn save_as_png<P: AsRef<Path>>(
+    fname: P,
+    xpix: usize,
+    ypix: usize,
+    data: &[u8]
+) -> Result<(), String> {
+    let fname = fname.as_ref();
+    match lodepng::encode_file(fname, data, xpix, ypix,
+                                lodepng::ColorType::RGB, 8) {
+        Err(e) => {
+            let estr = format!("Error writing file {}: {}",
+                               fname.display(), &e);
+            Err(estr)
+        },
+        Ok(_) => Ok(()),
+    }
+}
+
 pub fn load<P: AsRef<Path>>(fname: P)
 -> Result<(ImageDims, ColorSpec, IterType), String> {
     let fname = fname.as_ref();
