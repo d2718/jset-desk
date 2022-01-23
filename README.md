@@ -29,14 +29,6 @@ Changes to the color map, the iteration parameters, or the image size
 will not be reflected until you focus the main window and hit return (or
 click to recenter).
 
-Unless you have a recent version of
-[ImageMagick](https://imagemagick.org/index.php) installed (and in your
-`$PATH` or `%PATH%` or whatever Windows calls it), files will save in
-[Netpbm P6 format](https://en.wikipedia.org/wiki/Netpbm) and the file
-size will be _huge_. You'll want to convert the image to a .png (or maybe
-.webp? I don't understand that format) using ImageMagick or The Gimp or
-something.
-
 If you save your image with the view of it scaled to anything other than
 1:1, _it will save at that scale_. This is fine if you want to smooth out
 the image by making it huge and scaling it down (although just about any
