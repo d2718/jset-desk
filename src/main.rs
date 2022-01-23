@@ -1,7 +1,4 @@
 
-//use std::fs::File;
-//use std::io::{BufWriter, Write};
-//use std::process::{Command, Stdio};
 use std::sync::mpsc;
 
 use fltk::dialog;
@@ -11,9 +8,10 @@ use jset_desk::rw;
 use jset_desk::ui;
 use jset_desk::ui::Msg;
 
-const VERSION: &str = "0.2.3 beta";
+const VERSION: &str = "0.2.4 beta";
 const X_CLASS: &str = "JSet-Desktop";
 
+// A container to hold all the global variables.
 struct Globs {
     iter_pane: ui::iter::IterPane,
     colr_pane: ui::color::ColorPane,
@@ -30,6 +28,8 @@ struct Globs {
 }
 
 impl Globs {
+    // Given the passed `ImageDims`, decides how much recalculation should
+    // be done, and does only that much, to re-display the current image.
     pub fn recheck_and_redraw(&mut self, new_dims: ImageDims) {
         
         let mut should_redraw = false;
@@ -78,96 +78,6 @@ impl Globs {
         
         self.main_pane.set_image(x, y, data);
     }
-}
-
-//~ #[cfg(target_family="unix")]
-//~ fn save_file(xpix: usize, ypix: usize, data: &[u8]) -> std::io::Result<()> {
-    //~ let im_cmd = match Command::new("magick").arg("-version").output() {
-        //~ Ok(_) => Some("magick"),
-        //~ Err(_) => match Command::new("convert").arg("-version").output() {
-            //~ Ok(_) => Some("convert"),
-            //~ Err(_) => None,
-        //~ }
-    //~ };
-    
-    //~ match im_cmd {
-        //~ Some(cmd) => {
-            //~ let fname = match ui::pick_a_file(".png") {
-                //~ Some(fname) => fname,
-                //~ None => { return Ok(()); }
-            //~ };
-            //~ let mut cmd = Command::new(cmd)
-                //~ .args(["-", "-define", "png:compression-filter=2",
-                       //~ "-define", "png:compression-level=9",
-                       //~ "-define", "png:compression-strategy=1",
-                       //~ &fname])
-                //~ .stdin(Stdio::piped())
-                //~ .spawn()?;
-            //~ let mut cmd_in = cmd.stdin.as_mut().unwrap();
-            //~ write!(&mut cmd_in, "P6 {} {} 255\n", xpix, ypix)?;
-            //~ cmd_in.write_all(data)?;
-            //~ cmd.wait().unwrap();
-        //~ },
-        //~ None => {
-            //~ let fname = match ui::pick_a_file(".ppm") {
-                //~ Some(fname) => fname,
-                //~ None => { return Ok(()); }
-            //~ };
-            //~ let file = File::create(&fname)?;
-            //~ let mut w = BufWriter::new(file);
-            //~ write!(&mut w, "P6 {} {} 255\n", xpix, ypix)?;
-            //~ w.write_all(data)?;
-            //~ w.flush()?;
-        //~ },
-    //~ }
-    
-    //~ Ok(())
-//~ }
-
-//~ #[cfg(target_family="windows")]
-//~ fn save_file(xpix: usize, ypix: usize, data: &[u8]) -> std::io::Result<()> {
-    //~ let im_cmd = match Command::new("magick").arg("-version").output() {
-        //~ Ok(_) => Some("magick"),
-        //~ Err(_) => None,
-    //~ };
-    
-    //~ match im_cmd {
-        //~ Some(cmd) => {
-            //~ let fname = match ui::pick_a_file(".png") {
-                //~ Some(fname) => fname,
-                //~ None => { return Ok(()); }
-            //~ };
-            //~ let mut cmd = Command::new(cmd)
-                //~ .args(["-", "-define", "png:compression-filter=2",
-                       //~ "-define", "png:compression-level=9",
-                       //~ "-define", "png:compression-strategy=1",
-                       //~ &fname])
-                //~ .stdin(Stdio::piped())
-                //~ .spawn()?;
-            //~ let mut cmd_in = cmd.stdin.as_mut().unwrap();
-            //~ write!(&mut cmd_in, "P6 {} {} 255\n", xpix, ypix)?;
-            //~ cmd_in.write_all(data)?;
-            //~ cmd.wait().unwrap();
-        //~ },
-        //~ None => {
-            //~ let fname = match ui::pick_a_file(".ppm") {
-                //~ Some(fname) => fname,
-                //~ None => { return Ok(()); }
-            //~ };
-            //~ let file = File::create(&fname)?;
-            //~ let mut w = BufWriter::new(file);
-            //~ write!(&mut w, "P6 {} {} 255\n", xpix, ypix)?;
-            //~ w.write_all(data)?;
-            //~ w.flush()?;
-        //~ },
-    //~ }
-    
-    //~ Ok(())
-//~ }
-
-#[cfg(target_family="wasm")]
-fn save_file(xpix: usize, ypix: usize, data: &[u8]) -> std::io::Result<()> {
-    unimplemented!()
 }
 
 fn main() {
@@ -280,11 +190,6 @@ fn main() {
                     if let Err(e) = rw::save_as_png(fname, xpix, ypix, &data) {
                         dialog::message_default(&e);
                     };
-                    //~ if let Err(e) = save_file(xpix, ypix, &data) {
-                        //~ dialog::message_default(
-                            //~ &format!("Error saving file: {}", &e)
-                        //~ );
-                    //~ }
                 },
                 Msg::SaveValues => {
                     let fname = match ui::pick_a_file(".toml") {

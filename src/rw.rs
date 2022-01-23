@@ -1,15 +1,18 @@
 /*!
-Struct/methods to save/recall an image specification.
+Struct/methods for saving images, and also saving/recalling image
+specifications.
 */
 
 use std::fs::{File, read_to_string};
 use std::io::Write;
 use std::path::Path;
 
-use::serde_derive::{Serialize, Deserialize};
+use lodepng::{ColorType, Encoder, FilterStrategy};
+use serde_derive::{Serialize, Deserialize};
 
 use crate::image::*;
 
+/// A container for all the information required to recreate an image.
 #[derive(Deserialize, Serialize)]
 pub struct ImageParameters {
     iterator:   IterType,
@@ -17,7 +20,7 @@ pub struct ImageParameters {
     color_spec: ColorSpec,
 }
 
-
+/// Save the given image information.
 pub fn save<P: AsRef<Path>>(
     dims: &ImageDims,
     cspec: &ColorSpec,
@@ -59,24 +62,40 @@ pub fn save<P: AsRef<Path>>(
     Ok(())
 }
 
+/// Save the given _image_. Uses maximum zlib compression.
 pub fn save_as_png<P: AsRef<Path>>(
     fname: P,
     xpix: usize,
     ypix: usize,
     data: &[u8]
 ) -> Result<(), String> {
-    let fname = fname.as_ref();
-    match lodepng::encode_file(fname, data, xpix, ypix,
-                                lodepng::ColorType::RGB, 8) {
-        Err(e) => {
-            let estr = format!("Error writing file {}: {}",
-                               fname.display(), &e);
-            Err(estr)
-        },
-        Ok(_) => Ok(()),
+    let mut enc = Encoder::new();
+    enc.set_auto_convert(true);
+    enc.set_filter_strategy(FilterStrategy::MINSUM, false);
+    {
+        let mode = enc.info_raw_mut();
+        mode.set_colortype(ColorType::RGB);
+        mode.set_bitdepth(8);
+    }
+    {
+        let mut nfo = enc.info_png_mut();
+        nfo.color.set_colortype(ColorType::RGB);
+        nfo.color.set_bitdepth(8);
+        nfo.background_defined = false;
+        nfo.phys_unit = 0;
+    }
+    enc.settings_mut().zlibsettings.set_level(9);
+    
+    if let Err(e) = enc.encode_file(&fname, data, xpix, ypix) {
+        let estr = format!("Error saving file {}: {}",
+                            fname.as_ref().display(), &e);
+        Err(estr)
+    } else {
+        Ok(())
     }
 }
 
+/// Load the given image information.
 pub fn load<P: AsRef<Path>>(fname: P)
 -> Result<(ImageDims, ColorSpec, IterType), String> {
     let fname = fname.as_ref();
