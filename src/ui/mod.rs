@@ -124,7 +124,7 @@ pub fn setup_subwindow_behavior(
 Pops up an `fltk` file chooser dialog to specify a file name and ensures
 it ends with the supplied `extension`.
 */
-pub fn pick_a_file(extension: &str) -> Option<String> {
+pub fn pick_a_file(extension: &str, force_extension: bool) -> Option<String> {
     let lc_ext = extension.to_ascii_lowercase();
     let filter = format!("*{}\t*{}", &lc_ext, &extension.to_ascii_uppercase());
     
@@ -139,7 +139,9 @@ pub fn pick_a_file(extension: &str) -> Option<String> {
         return Some(fname);
     }
     
-    fname.push_str(extension);
+    if force_extension {
+        fname.push_str(extension);
+    }
     Some(fname)
 }
 

@@ -73,14 +73,17 @@ In no particular order, I'd like to add:
     vectorization. LLVM supposedly does some vector optimization when it
     realizes it can, but I don't know how smart or aggressive or effective
     it is. This is going to take some experimentation and profiling.
-  * Once native .png saving is worked out, I'd like to explore saving the
+  * ~~Once native .png saving is worked out, I'd like to explore saving the
     "image parameters" as an EXIF sidecar to the saved .png, so you'd
     never even have to worry about saving a separate file. You'd only have
-    to worry about image manipulation programs stripping your EXIF data.
+    to worry about image manipulation programs stripping your EXIF data.~~
+    As of 0.2.5, all PNGs are saved with embedded metadata, and can be
+    reloaded and regenerated from the load dialog, just like explicit
+    .toml metadata files.
 
 ### Help
 
 If you have any experience with creating FLTK UIs, I'd love to ask you some
 questions. If you've ever _themed_ FLTK, just go ahead and make a pull
-request. I don't care that this looks like a Win95 app, but it'd probably
+request. _I_ don't care that this looks like a Win95 app, but it'd probably
 be nice if it were slicker.
