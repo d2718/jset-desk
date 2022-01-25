@@ -8,7 +8,7 @@ use jset_desk::rw;
 use jset_desk::ui;
 use jset_desk::ui::Msg;
 
-const VERSION: &str = "0.2.4 beta";
+const VERSION: &str = "0.2.5 beta";
 const X_CLASS: &str = "JSet-Desktop";
 
 // A container to hold all the global variables.
@@ -139,13 +139,14 @@ fn main() {
                     globs.main_pane.raise();
                 },
                 Msg::Load => {
-                    let fname = match ui::pick_a_file(".toml") {
+                    //let fname = match ui::pick_a_file(".toml") {
+                    let fname = match ui::pick_a_file("PNG files (*.png)\tMarkup files (*.toml)", false) {
                         Some(f) => f,
                         None => { continue; }
                     };
-                    match rw::load(fname) {
+                    match rw::load(&fname) {
                         Err(e) => dialog::message_default(
-                                    &format!("Error loading file: {}", &e)
+                                    &format!("Error loading {}: {}", &fname, &e)
                                   ),
                         Ok((dims, cspec, itype)) => {
                             globs.colr_pane.respec(cspec);
@@ -182,17 +183,23 @@ fn main() {
                     globs.recheck_and_redraw(new_dims);
                 },
                 Msg::SaveImage => {
-                    let fname = match ui::pick_a_file(".png") {
+                    let fname = match ui::pick_a_file(".png", true) {
                         Some(fname) => fname,
                         None => { continue; },
                     };
                     let (xpix, ypix, data) = globs.main_pane.get_image();
-                    if let Err(e) = rw::save_as_png(fname, xpix, ypix, &data) {
+                    //~ if let Err(e) = rw::save_as_png(fname, xpix, ypix, &data) {
+                        //~ dialog::message_default(&e);
+                    //~ };
+                    if let Err(e) = rw::save_with_metadata(
+                        fname, xpix, ypix, &data,
+                        &globs.cur_dims, &globs.cur_spec, &globs.cur_iter
+                    ) {
                         dialog::message_default(&e);
                     };
                 },
                 Msg::SaveValues => {
-                    let fname = match ui::pick_a_file(".toml") {
+                    let fname = match ui::pick_a_file(".toml", true) {
                         Some(f) => f,
                         None => { continue; },
                     };
