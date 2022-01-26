@@ -36,6 +36,8 @@ image and features the controlls for navigation/zooming.
 pub struct ImgPane {
     win: DoubleWindow,
     im_frame: Frame,
+    xpix_input: IntInput,
+    ypix_input: IntInput,
     image_data: Vec<u8>,
 }
 
@@ -152,6 +154,8 @@ impl ImgPane {
         let ip = ImgPane {
             win: w.clone(),
             im_frame: image_frame.clone(),
+            xpix_input: width_input.clone(),
+            ypix_input: height_input.clone(),
             image_data: Vec::new(),
         };
         
@@ -377,9 +381,19 @@ impl ImgPane {
         fltk::app::sleep(0.01);
     }
     
+    /**
+    Hack to get the window to be on top. I can't figure out how to do this
+    in a legit fashion.
+    */
     pub fn raise(&mut self) {
         self.win.hide();
         self.win.show();
+    }
+    
+    /// When an image is loaded, these inputs need their values set properly.
+    pub fn set_input_dimensions(&mut self, x: usize, y: usize) {
+        self.xpix_input.set_value(&format!("{}", x));
+        self.ypix_input.set_value(&format!("{}", y));
     }
     
     /**

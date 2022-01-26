@@ -151,6 +151,7 @@ fn main() {
                         Ok((dims, cspec, itype)) => {
                             globs.colr_pane.respec(cspec);
                             globs.iter_pane = ui::iter::IterPane::new(itype, sndr.clone());
+                            globs.main_pane.set_input_dimensions(dims.xpix, dims.ypix);
                             globs.recheck_and_redraw(dims);
                         },
                     }
