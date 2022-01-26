@@ -8,7 +8,7 @@ use jset_desk::rw;
 use jset_desk::ui;
 use jset_desk::ui::Msg;
 
-const VERSION: &str = "0.2.5 beta";
+const VERSION: &str = "0.2.6 beta";
 const X_CLASS: &str = "JSet-Desktop";
 
 // A container to hold all the global variables.
