@@ -7,12 +7,12 @@ use std::default::Default;
 use std::sync::mpsc;
 use std::thread;
 
+use ::serde_derive::{Deserialize, Serialize};
 use lazy_static::lazy_static;
-use::serde_derive::{Serialize, Deserialize};
 
 use crate::cx::Cx;
 
-lazy_static!{
+lazy_static! {
     static ref N_THREADS: usize = num_cpus::get_physical();
 }
 
@@ -42,13 +42,21 @@ to do calculations. Includes a method for converting to hard-byte RGB format.
 */
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(from = "[f32; 3]", into = "[f32; 3]")]
-pub struct RGB { r: f32, g: f32, b: f32 }
+pub struct RGB {
+    r: f32,
+    g: f32,
+    b: f32,
+}
 
 // For constraining the arguments to `RGB::new()` to the proper range.
 fn constrain_f32(x: f32) -> f32 {
-    if x < 0.0 { 0.0 }
-    else if x > 255.0 { 255.0 }
-    else { x }
+    if x < 0.0 {
+        0.0
+    } else if x > 255.0 {
+        255.0
+    } else {
+        x
+    }
 }
 
 impl RGB {
@@ -63,46 +71,70 @@ impl RGB {
             b: constrain_f32(blue),
         }
     }
-    
-    pub fn r(&self) -> f32 { self.r }
-    pub fn g(&self) -> f32 { self.g }
-    pub fn b(&self) -> f32 { self.b }
-    
-    pub fn set_r(&mut self, x: f32) { self.r = constrain_f32(x); }
-    pub fn set_g(&mut self, x: f32) { self.g = constrain_f32(x); }
-    pub fn set_b(&mut self, x: f32) { self.b = constrain_f32(x); }
+
+    pub fn r(&self) -> f32 {
+        self.r
+    }
+    pub fn g(&self) -> f32 {
+        self.g
+    }
+    pub fn b(&self) -> f32 {
+        self.b
+    }
+
+    pub fn set_r(&mut self, x: f32) {
+        self.r = constrain_f32(x);
+    }
+    pub fn set_g(&mut self, x: f32) {
+        self.g = constrain_f32(x);
+    }
+    pub fn set_b(&mut self, x: f32) {
+        self.b = constrain_f32(x);
+    }
 
     /** Convert to a three-byte `[R, G, B]` array. */
     pub fn to_rgb8(&self) -> [u8; 3] {
-        [
-            self.r as u8,
-            self.g as u8,
-            self.b as u8
-        ]
+        [self.r as u8, self.g as u8, self.b as u8]
     }
-    
+
     /** Average a slice of color values. */
     pub fn average(colors: &[RGB]) -> RGB {
-        let (mut rtot, mut gtot, mut btot) : (f32, f32, f32) = (0.0, 0.0, 0.0);
-        
+        let (mut rtot, mut gtot, mut btot): (f32, f32, f32) = (0.0, 0.0, 0.0);
+
         for px in colors.iter() {
-            rtot += px.r; gtot += px.g; btot += px.b;
+            rtot += px.r;
+            gtot += px.g;
+            btot += px.b;
         }
-        
+
         let nf = colors.len() as f32;
-        RGB::new(rtot/nf, gtot/nf, btot/nf)
+        RGB::new(rtot / nf, gtot / nf, btot / nf)
     }
-    
-    pub const BLACK:  RGB = RGB { r: 0.0, g: 0.0, b: 0.0 };
-    pub const WHITE:  RGB = RGB { r: 255.0, g: 255.0, b: 255.0 };
+
+    pub const BLACK: RGB = RGB {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
+    pub const WHITE: RGB = RGB {
+        r: 255.0,
+        g: 255.0,
+        b: 255.0,
+    };
 }
 
 impl From<[f32; 3]> for RGB {
     fn from(a: [f32; 3]) -> RGB {
-        RGB { r: a[0], g: a[1], b: a[2] }
+        RGB {
+            r: a[0],
+            g: a[1],
+            b: a[2],
+        }
     }
 }
 
+// Pretty sure I can't implement a trait I didn't define on an `[f32; 3]`.
+#[allow(clippy::from_over_into)]
 impl Into<[f32; 3]> for RGB {
     fn into(self) -> [f32; 3] {
         [self.r, self.g, self.b]
@@ -130,21 +162,18 @@ impl ImageDims {
     pub fn height(&self) -> f64 {
         self.width * (self.ypix as f64) / (self.xpix as f64)
     }
-    
+
     /** Return the coordinates of the center of the image. */
     pub fn center(&self) -> (f64, f64) {
-        (
-            self.x + self.width / 2.0,
-            self.y - self.height() / 2.0,
-        )
+        (self.x + self.width / 2.0, self.y - self.height() / 2.0)
     }
-    
+
     /** Return a new view zoomed in by the given factor. */
     pub fn zoom(&self, factor: f64) -> ImageDims {
         let (c_x, c_y) = self.center();
         let (n_w, n_h) = (self.width / factor, self.height() / factor);
         let (n_x, n_y) = (c_x - n_w / 2.0, c_y + n_h / 2.0);
-        
+
         ImageDims {
             xpix: self.xpix,
             ypix: self.ypix,
@@ -153,18 +182,18 @@ impl ImageDims {
             width: n_w,
         }
     }
-    
+
     /**
     Return a new view centered on the same spot, but with the aspect
     ratio changed.
-    
+
     The new view will cover at least as much of the plane as the current one.
     */
     pub fn resize(&self, new_xpix: usize, new_ypix: usize) -> ImageDims {
         let cur_aspect = (self.xpix as f64) / (self.ypix as f64);
         let new_aspect = (new_xpix as f64) / (new_ypix as f64);
         let (c_x, c_y) = self.center();
-        
+
         if new_aspect > cur_aspect {
             let new_w = self.height() * new_aspect;
             let n_x = c_x - new_w / 2.0;
@@ -187,7 +216,7 @@ impl ImageDims {
             }
         }
     }
-    
+
     /**
     Return a new view with the center at new specified position:
     `x_frac` of the way across the image, `y_frac` of the way down it.
@@ -208,11 +237,19 @@ impl ImageDims {
 
 /** Specifies a single gradient in a `ColorMap`. */
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Gradient { pub steps: usize, pub start: RGB, pub end: RGB }
+pub struct Gradient {
+    pub steps: usize,
+    pub start: RGB,
+    pub end: RGB,
+}
 
 impl Default for Gradient {
     fn default() -> Self {
-        Self { start: RGB::BLACK, end: RGB::WHITE, steps: 256 }
+        Self {
+            start: RGB::BLACK,
+            end: RGB::WHITE,
+            steps: 256,
+        }
     }
 }
 
@@ -235,24 +272,39 @@ impl ColorSpec {
     a spec. */
     pub fn new(gradients: Vec<Gradient>, default: RGB) -> ColorSpec {
         let length = gradients.iter().map(|g| g.steps).sum();
-        
+
         ColorSpec {
             length,
             default,
             gradients,
         }
     }
-    
-    /** Return the number of steps the resultant `ColorMap` will have */
-    pub fn len(&self) -> usize { self.length }
-    
-    /** Do the work to turn me into an actual `ColorMap`. */
-    pub fn to_map(self) -> ColorMap { ColorMap::make(self) }
-    
-    pub fn default(&self) -> RGB { self.default }
-    pub fn gradients(self) -> Vec<Gradient> { self.gradients }
-}
 
+    /** Return the number of steps the resultant `ColorMap` will have */
+    pub fn len(&self) -> usize {
+        self.length
+    }
+    /**
+    Return whether the `ColorMap` will have zero steps.
+
+    Honestly, this is just to satisfy Clippy.
+    */
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
+    }
+
+    /** Do the work to turn me into an actual `ColorMap`. */
+    pub fn to_map(self) -> ColorMap {
+        ColorMap::make(self)
+    }
+
+    pub fn default(&self) -> RGB {
+        self.default
+    }
+    pub fn gradients(self) -> Vec<Gradient> {
+        self.gradients
+    }
+}
 
 /**
 The `ColorMap` holds the vector of colors required to turn an `IterMap`
@@ -271,7 +323,7 @@ impl ColorMap {
     pub fn make(spec: ColorSpec) -> ColorMap {
         let mut colors: Vec<RGB> = Vec::with_capacity(spec.length);
         let default = spec.default;
-        
+
         for grad in spec.gradients.iter() {
             let dr = grad.end.r - grad.start.r;
             let dg = grad.end.g - grad.start.g;
@@ -280,25 +332,36 @@ impl ColorMap {
             for n in 0..grad.steps {
                 let frac = (n as f32) / steps_f;
                 let c = RGB::new(
-                    grad.start.r + frac*dr,
-                    grad.start.g + frac*dg,
-                    grad.start.b + frac*db,
+                    grad.start.r + frac * dr,
+                    grad.start.g + frac * dg,
+                    grad.start.b + frac * db,
                 );
                 colors.push(c);
             }
         }
-        
+
         ColorMap { colors, default }
     }
-    
+
     /**
     Return the total number of steps in the `ColorMap`.
-    
+
     This information is useful for constraining the iterator so it doesn't
     run forever.
     */
-    pub fn len(&self) -> usize { self.colors.len() }
-    
+    pub fn len(&self) -> usize {
+        self.colors.len()
+    }
+
+    /**
+    Return whether the `ColorMap` has zero steps.
+
+    This shuts Clippy up.
+    */
+    pub fn is_empty(&self) -> bool {
+        self.colors.is_empty()
+    }
+
     /**
     Return the `RGB` color that a point requiring `n` steps to diverge
     should be colored.
@@ -324,10 +387,16 @@ pub struct FImage32 {
 }
 
 impl FImage32 {
-    pub fn xpix(&self) -> usize { self.dims.xpix }
-    pub fn ypix(&self) -> usize { self.dims.ypix }
-    pub fn pixels(&self) -> &[RGB] { &self.data }
-    
+    pub fn xpix(&self) -> usize {
+        self.dims.xpix
+    }
+    pub fn ypix(&self) -> usize {
+        self.dims.ypix
+    }
+    pub fn pixels(&self) -> &[RGB] {
+        &self.data
+    }
+
     // Translate the color values directly to 8-bit RGB.
     //
     // This method is equivalent to calling `.to_rgb8_scaled(1)`, but requires
@@ -341,21 +410,20 @@ impl FImage32 {
                 rgb8_data.push(*b);
             }
         }
-    
-    rgb8_data
+
+        rgb8_data
     }
-    
+
     // Translate the color values to 8-bit RGB, but scaled down by a
     // factor of 1/`ratio`. Each pixel value will be calculated by
     // averaging a `ratio` by `ratio` square of pixels.
     fn to_rgb8_scaled(&self, ratio: usize) -> (usize, usize, Vec<u8>) {
         let pix_lines = self.dims.ypix / ratio;
-        let pix_cols  = self.dims.xpix / ratio;
-        let n_pix     = pix_lines * pix_cols;
+        let pix_cols = self.dims.xpix / ratio;
+        let n_pix = pix_lines * pix_cols;
         let mut rgb8_data: Vec<u8> = Vec::with_capacity(n_pix * 3);
-        let mut palette: [RGB; SCALE_PALETTE_SIZE]
-                = [RGB::BLACK; SCALE_PALETTE_SIZE];
-        
+        let mut palette: [RGB; SCALE_PALETTE_SIZE] = [RGB::BLACK; SCALE_PALETTE_SIZE];
+
         for yi in 0..pix_lines {
             let base_offs = yi * self.dims.xpix * ratio;
             for xi in 0..pix_cols {
@@ -364,7 +432,7 @@ impl FImage32 {
                 for y in 0..ratio {
                     let po = offs + (self.dims.xpix * y);
                     for x in 0..ratio {
-                        palette[pp] = self.data[po+x];
+                        palette[pp] = self.data[po + x];
                         pp += 1;
                     }
                 }
@@ -374,23 +442,23 @@ impl FImage32 {
                 }
             }
         }
-        
+
         (pix_cols, pix_lines, rgb8_data)
     }
-    
+
     /**
     Return the image data as a vector of 8-bit RGB color triples, scaled
     down by a factor of `scale_factor` (a value of 1 will produce a
     fill-sized image).
-    
+
     This is the data format that most external things like.
     */
-    pub fn to_rgb8(&self, scale_factor: usize) -> (usize, usize, Vec::<u8>) {
+    pub fn to_rgb8(&self, scale_factor: usize) -> (usize, usize, Vec<u8>) {
         if scale_factor < 2 {
             (
                 self.dims.xpix,
                 self.dims.ypix,
-                self.to_rgb8_full_resolution()
+                self.to_rgb8_full_resolution(),
             )
         } else if scale_factor > MAX_SCALE_FACTOR {
             self.to_rgb8_scaled(MAX_SCALE_FACTOR)
@@ -410,17 +478,19 @@ is all the information required for iterating a point.
 #[serde(tag = "type")]
 pub enum IterType {
     Mandlebrot,
-    PseudoMandlebrot{ a: Cx, b: Cx },
-    Polynomial{ coefs: Vec<Cx> },
+    PseudoMandlebrot { a: Cx, b: Cx },
+    Polynomial { coefs: Vec<Cx> },
 }
 
 /* Iterate a point using the Mandlebrot iterator. */
 fn mandlebrot_iterator(c: Cx, limit: usize) -> usize {
     let mut z = Cx { re: 0.0, im: 0.0 };
-    
+
     for n in 0..limit {
         z = (z * z) + c;
-        if z.sqmod() > SQ_MOD_LIMIT { return n; }
+        if z.sqmod() > SQ_MOD_LIMIT {
+            return n;
+        }
     }
     limit
 }
@@ -445,10 +515,12 @@ fn pseudomandle_maker(a: Cx, b: Cx) -> Box<dyn Fn(Cx, usize) -> usize> {
     let f = move |c, limit| {
         let mut z = Cx { re: 0.0, im: 0.0 };
         let pseudo_c = b * c;
-        
+
         for n in 0..limit {
             z = (a * z * z) + pseudo_c;
-            if z.sqmod() > SQ_MOD_LIMIT { return n; }
+            if z.sqmod() > SQ_MOD_LIMIT {
+                return n;
+            }
         }
         limit
     };
@@ -478,11 +550,13 @@ fn polyiter_maker(v: Vec<Cx>) -> Box<dyn Fn(Cx, usize) -> usize> {
             }
             tot = unsafe { tot + (*v.get_unchecked(deg) * w) };
             z = tot;
-            if z.sqmod() > SQ_MOD_LIMIT { return n; }
+            if z.sqmod() > SQ_MOD_LIMIT {
+                return n;
+            }
         }
         limit
     };
-    
+
     Box::new(f)
 }
 
@@ -518,10 +592,10 @@ impl IterMapChunk {
         let height = self.dims.height();
         let f = match self.itertype.clone() {
             IterType::Mandlebrot => Box::new(mandlebrot_iterator),
-            IterType::PseudoMandlebrot{ a, b } => pseudomandle_maker(a, b),
-            IterType::Polynomial{ coefs } => polyiter_maker(coefs),
+            IterType::PseudoMandlebrot { a, b } => pseudomandle_maker(a, b),
+            IterType::Polynomial { coefs } => polyiter_maker(coefs),
         };
-        
+
         for yp in self.y_start..(self.y_start + self.n_rows) {
             let y_frac = (yp as f64) / f_ypix;
             let y = self.dims.y - (y_frac * height);
@@ -532,23 +606,25 @@ impl IterMapChunk {
                 new_data.push(n);
             }
         }
-        
+
         self.last_limit = limit;
         self.data = new_data;
     }
-    
+
     fn reiterate(&mut self, limit: usize) {
-        if limit < self.last_limit { return; }
-        
+        if limit < self.last_limit {
+            return;
+        }
+
         let f_xpix = self.dims.xpix as f64;
         let f_ypix = self.dims.ypix as f64;
         let height = self.dims.height();
         let f = match self.itertype.clone() {
             IterType::Mandlebrot => Box::new(mandlebrot_iterator),
-            IterType::PseudoMandlebrot{ a, b } => pseudomandle_maker(a, b),
-            IterType::Polynomial{ coefs } => polyiter_maker(coefs),
+            IterType::PseudoMandlebrot { a, b } => pseudomandle_maker(a, b),
+            IterType::Polynomial { coefs } => polyiter_maker(coefs),
         };
-        
+
         let mut idx: usize = 0;
         for yp in self.y_start..(self.y_start + self.n_rows) {
             let y_frac = (yp as f64) / f_ypix;
@@ -563,7 +639,7 @@ impl IterMapChunk {
                 idx += 1;
             }
         }
-        
+
         self.last_limit = limit;
     }
 }
@@ -584,20 +660,16 @@ pub struct IterMap {
 
 impl IterMap {
     /** Generate a new `IterMap` from the given information. */
-    pub fn new(
-        dims: ImageDims,
-        itertype: IterType,
-        limit: usize
-    ) -> IterMap {
+    pub fn new(dims: ImageDims, itertype: IterType, limit: usize) -> IterMap {
         let n_chunks = CHUNKS_PER_THREAD * *N_THREADS;
         let chunk_height = dims.ypix / n_chunks;
         let last_chunk_height = dims.ypix % n_chunks;
-        
+
         let mut to_process: Vec<IterMapChunk> = Vec::new();
         let mut start_y: usize = 0;
         for _ in 0..n_chunks {
             let imc = IterMapChunk {
-                dims: dims,
+                dims,
                 itertype: itertype.clone(),
                 y_start: start_y,
                 n_rows: chunk_height,
@@ -609,7 +681,7 @@ impl IterMap {
         }
         if last_chunk_height > 0 {
             let imc = IterMapChunk {
-                dims: dims,
+                dims,
                 itertype: itertype.clone(),
                 y_start: start_y,
                 n_rows: last_chunk_height,
@@ -618,7 +690,7 @@ impl IterMap {
             };
             to_process.push(imc);
         }
-        
+
         let n_chunks = to_process.len();
         let mut done_chunks: Vec<IterMapChunk> = Vec::with_capacity(n_chunks);
         let mut active_threads: usize = 0;
@@ -627,8 +699,12 @@ impl IterMap {
             if active_threads < *N_THREADS {
                 if let Some(mut imc) = to_process.pop() {
                     #[cfg(debug_assertions)]
-                    println!("chunk -> (y_start: {}, n_rows: {}, pixels: {})",
-                                imc.y_start, imc.n_rows, imc.data.len());
+                    println!(
+                        "chunk -> (y_start: {}, n_rows: {}, pixels: {})",
+                        imc.y_start,
+                        imc.n_rows,
+                        imc.data.len()
+                    );
                     let txc = tx.clone();
                     thread::spawn(move || {
                         imc.iterate(limit);
@@ -637,41 +713,47 @@ impl IterMap {
                     active_threads += 1;
                 }
             }
-            if active_threads == *N_THREADS || to_process.len() == 0 {
+            if active_threads == *N_THREADS || to_process.is_empty() {
                 let imc = rx.recv().unwrap();
                 #[cfg(debug_assertions)]
-                println!("<- chunk (y_start: {}, n_rows: {}, pixels: {})",
-                            imc.y_start, imc.n_rows, imc.data.len());
+                println!(
+                    "<- chunk (y_start: {}, n_rows: {}, pixels: {})",
+                    imc.y_start,
+                    imc.n_rows,
+                    imc.data.len()
+                );
                 active_threads -= 1;
                 done_chunks.push(imc);
             }
         }
-        
+
         done_chunks.sort_by_key(|imc| imc.y_start);
-        
+
         IterMap {
-            dims: dims,
-            itertype: itertype.clone(),
-            limit: limit,
+            dims,
+            itertype,
+            limit,
             chunks: done_chunks,
         }
     }
-    
+
     /**
     Extend the current `IterMap` to more steps.
-    
+
     This is useful if the image dimensions and iteration parameters haven't
     changed, but there's a new target `ColorMap` that's of longer length.
-    
+
     This method will grovel through all the points in the `IterMap` and
     re-iterate only those who have the previous maximum value.
     */
     pub fn reiterate(&mut self, limit: usize) {
         #[cfg(debug_assertions)]
         println!("reiteration! {}", limit);
-        
-        if limit <= self.limit { return; }
-        
+
+        if limit <= self.limit {
+            return;
+        }
+
         let n_chunks = self.chunks.len();
         let mut done_chunks: Vec<IterMapChunk> = Vec::with_capacity(n_chunks);
         let mut active_threads: usize = 0;
@@ -687,37 +769,42 @@ impl IterMap {
                     active_threads += 1;
                 }
             }
-            if active_threads == *N_THREADS || self.chunks.len() == 0 {
+            if active_threads == *N_THREADS || self.chunks.is_empty() {
                 let imc = rx.recv().unwrap();
                 active_threads -= 1;
                 done_chunks.push(imc);
             }
         }
-        
+
         done_chunks.sort_by_key(|imc| imc.y_start);
-        
+
         std::mem::swap(&mut self.chunks, &mut done_chunks);
         self.limit = limit;
     }
-    
-    pub fn dims(&self) -> ImageDims { self.dims }
-    pub fn itertype(&self) -> &IterType { &self.itertype }
-    pub fn limit(&self) -> usize { self.limit }
-    
+
+    pub fn dims(&self) -> ImageDims {
+        self.dims
+    }
+    pub fn itertype(&self) -> &IterType {
+        &self.itertype
+    }
+    pub fn limit(&self) -> usize {
+        self.limit
+    }
+
     pub fn color(&self, map: &ColorMap) -> FImage32 {
         let n_pix = self.dims.xpix * self.dims.ypix;
         let mut rgb_data: Vec<RGB> = Vec::with_capacity(n_pix);
-        
+
         for chunk in self.chunks.iter() {
             for n in chunk.data.iter() {
                 rgb_data.push(map.get(*n));
             }
         }
-        
+
         FImage32 {
             dims: self.dims,
             data: rgb_data,
         }
     }
 }
-
