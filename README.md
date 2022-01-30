@@ -40,6 +40,15 @@ and then load them later to continue work where you left off. I made the
 load button smaller so you'll be less likely to hit it and wipe out any
 work you're in the middle of accidentally.
 
+As of 0.2.5, all images are automatically saved with the image parameters
+embedded as metadata, and can be loaded just like `.toml` files.
+
+As of 0.2.7, colors in the color map pane can be drag'n'dropped onto each
+other. So, for example, if you have just set the end color of the final
+gradient in the pane and want the "default color" to be that same color,
+just click on the final color button, drag the mouse onto the default color
+button, and release.
+
 ### Roadmap
 
 In no particular order, I'd like to add:
@@ -73,6 +82,12 @@ In no particular order, I'd like to add:
     vectorization. LLVM supposedly does some vector optimization when it
     realizes it can, but I don't know how smart or aggressive or effective
     it is. This is going to take some experimentation and profiling.
+    __UPDATE__: I tried writing an explicitly-vectorized complex number
+    implementation, and a typical Mandlebrot-style iteration with it
+    actually took _three times as long_ as the naive implementation just
+    using regular multiplication and addition. Clearly, the LLVM backend
+    is _way_ smarter than I am, and it may not be worth barking up this
+    particular tree.
   * ~~Once native .png saving is worked out, I'd like to explore saving the
     "image parameters" as an EXIF sidecar to the saved .png, so you'd
     never even have to worry about saving a separate file. You'd only have

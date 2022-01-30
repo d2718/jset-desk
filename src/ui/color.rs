@@ -8,8 +8,9 @@ use std::rc::Rc;
 use std::sync::mpsc;
 
 use fltk::{
+    app::add_timeout3,
     button::Button,
-    enums::Shortcut,
+    enums::{Event, Shortcut},
     frame::Frame,
     input::IntInput,
     prelude::*,
@@ -214,7 +215,7 @@ struct GradientChooser {
 impl GradientChooser {
     // Create a new `GradientChooser` that initially displays parameters
     // for the supplied `Gradient`.
-    fn new(g: Gradient) -> GradientChooser {
+    fn new(g: Gradient, drag_color: Rc<Cell<Option<RGB>>>) -> GradientChooser {
         let w = DoubleWindow::default().with_size(GRADIENT_ROW_WIDTH, GRADIENT_ROW_HEIGHT);
         let mut sbutt = Button::default()
             .with_size(GRADIENT_BUTTON_WIDTH, GRADIENT_ROW_HEIGHT)
@@ -268,6 +269,62 @@ impl GradientChooser {
                 }
             }
         });
+        
+        sbutt.handle({
+            let sc_cell = sc_cell.clone();
+            let drag_color = drag_color.clone();
+            move |b, evt| {
+                match evt {
+                    Event::Enter => {
+                        if let Some(c) = drag_color.get() {
+                            b.set_color(rgb_to_fltk(c));
+                            b.redraw();
+                            sc_cell.set(c);
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    Event::Released => {
+                        drag_color.set(Some(sc_cell.get()));
+                        add_timeout3(0.0, {
+                            let drag_color = drag_color.clone();
+                            move |_| { drag_color.set(None); }
+                        });
+                        true
+                    },
+                    _ => false,
+                }
+            }
+        });
+        ebutt.handle({
+            let ec_cell = ec_cell.clone();
+            let drag_color = drag_color.clone();
+            move |b, evt| {
+                match evt {
+                    Event::Enter => {
+                        if let Some(c) = drag_color.get() {
+                            b.set_color(rgb_to_fltk(c));
+                            b.redraw();
+                            ec_cell.set(c);
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    Event::Released => {
+                        drag_color.set(Some(ec_cell.get()));
+                        add_timeout3(0.0, {
+                            let drag_color = drag_color.clone();
+                            move |_| { drag_color.set(None); }
+                        });
+                        true
+                    },
+                    _ => false,
+                }
+            }
+        });
+
 
         GradientChooser {
             win: w,
@@ -314,6 +371,7 @@ struct ColorPaneGuts {
     choosers: Vec<GradientChooser>,
     win: DoubleWindow,
     default_color: RGB,
+    drag_color: Rc<Cell<Option<RGB>>>,
     me: Option<Rc<RefCell<ColorPaneGuts>>>,
 }
 
@@ -330,14 +388,17 @@ impl ColorPaneGuts {
         w.end();
 
         setup_subwindow_behavior(&mut w, pipe);
+        
+        let drag_color: Rc<Cell<Option<RGB>>> = Rc::new(Cell::new(None));
 
         let pg = Rc::new(RefCell::new(ColorPaneGuts {
             choosers: new_gradients
                 .iter()
-                .map(|g| GradientChooser::new(*g))
+                .map(|g| GradientChooser::new(*g, drag_color.clone()))
                 .collect(),
             win: w.clone(),
             default_color,
+            drag_color,
             me: None,
         }));
 
@@ -442,6 +503,33 @@ impl ColorPaneGuts {
                 }
             }
         });
+        default_select.handle({
+            let drag_color = self.drag_color.clone();
+            let me = self.me.as_ref().unwrap().clone();
+            move |b, evt| {
+                match evt {
+                    Event::Enter => {
+                        if let Some(c) = drag_color.get() {
+                            b.set_color(rgb_to_fltk(c));
+                            me.borrow_mut().default_color = c;
+                            b.redraw();
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    Event::Released => {
+                        drag_color.set(Some(me.borrow().default_color));
+                        add_timeout3(0.0, {
+                            let drag_color = drag_color.clone();
+                            move |_| { drag_color.set(None); }
+                        });
+                        true
+                    },
+                    _ => false,
+                }
+            }
+        });
     }
 
     // Insert a new `GradientChooser` at position `n`. If `n` is larger
@@ -473,7 +561,7 @@ impl ColorPaneGuts {
             end: new_end,
             steps: 256,
         };
-        let gc = GradientChooser::new(g);
+        let gc = GradientChooser::new(g, self.drag_color.clone());
         self.choosers.insert(n, gc);
 
         self.redraw();
@@ -544,7 +632,7 @@ impl ColorPane {
         g.default_color = new_default;
         g.clear();
         for grad in new_spec.gradients().into_iter() {
-            let gc = GradientChooser::new(grad);
+            let gc = GradientChooser::new(grad, g.drag_color.clone());
             g.choosers.push(gc);
         }
         g.redraw();
