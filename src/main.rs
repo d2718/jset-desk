@@ -7,7 +7,7 @@ use jset_desk::rw;
 use jset_desk::ui;
 use jset_desk::ui::Msg;
 
-const VERSION: &str = "0.2.7 beta";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const X_CLASS: &str = "JSet-Desktop";
 
 // A container to hold all the global variables.
@@ -75,6 +75,7 @@ impl Globs {
 }
 
 fn main() {
+    let version = format!("{} beta", VERSION);
     fltk::window::DoubleWindow::set_default_xclass(X_CLASS);
 
     let (sndr, rcvr) = mpsc::channel::<Msg>();
@@ -88,7 +89,7 @@ fn main() {
 
     let a = fltk::app::App::default();
 
-    let mut main_pane = ui::img::ImgPane::new(sndr.clone(), VERSION, dims);
+    let mut main_pane = ui::img::ImgPane::new(sndr.clone(), &version, dims);
     let initial_spec = ColorSpec::new(vec![Gradient::default()], RGB::WHITE);
     let colr_pane = ui::color::ColorPane::new(initial_spec, sndr.clone());
     let iter_pane = ui::iter::IterPane::new(IterType::Mandlebrot, sndr.clone());

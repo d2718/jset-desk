@@ -1,6 +1,8 @@
 [package]
 name = "jset_desk"
-version = "0.2.6"
+description = "an application for drawing colored Julia sets"
+version = "0.2.7"
+homepage = "https://github.com/d2718/jset-desk"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
