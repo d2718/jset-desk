@@ -10,8 +10,9 @@ find in action [here](http://d2718.net/jset/).
 
 ### Installation
 
-There's a [static Windows 10
-binary](https://d2718.net/jset/jset_desk_win10.exe) you can download.
+You can download a [Windows 10
+binary](https://d2718.net/jset/jset_desk_win10.exe) of the (almost always)
+most up-to-date version.
 
 Otherwise, you can compile it yourself. There aren't many Rust crate
 dependencies, but [FLTK](https://www.fltk.org/) is a doozy; you'll need

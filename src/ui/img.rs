@@ -405,6 +405,7 @@ impl ImgPane {
     in a legit fashion.
     */
     pub fn raise(&mut self) {
+        #[cfg(feature = "hide_before_raise")]
         self.win.hide();
         self.win.show();
     }

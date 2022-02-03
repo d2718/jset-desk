@@ -644,6 +644,7 @@ impl ColorPane {
     */
     pub fn raise(&mut self) {
         let w = &mut self.guts.borrow_mut().win;
+        #[cfg(feature = "hide_before_raise")]
         w.hide();
         w.show();
     }

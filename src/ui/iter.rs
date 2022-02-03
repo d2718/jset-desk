@@ -353,6 +353,7 @@ impl IterPane {
     like there should be a more direct way to do this.
     */
     pub fn raise(&mut self) {
+        #[cfg(feature = "hide_before_raise")]
         self.win.hide();
         self.win.show();
     }
