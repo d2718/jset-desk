@@ -156,6 +156,8 @@ impl ImgPane {
         image_frame.set_color(Color::Black);
         scroll_region.end();
 
+        w.resizable(&scroll_region);
+
         w.end();
         w.show();
 
@@ -401,8 +403,12 @@ impl ImgPane {
     }
 
     /**
-    Hack to get the window to be on top. I can't figure out how to do this
-    in a legit fashion.
+    "Focus" the window.
+
+    On some systems, evidently, just calling `DoubleWindow::show()` won't
+    cut it; you can work aound this by first hiding the window, then calling
+    it, hence the feature. If you notice that the main window doesn't raise
+    when you hit Return, try compling with the `hide_before_raise` feature.
     */
     pub fn raise(&mut self) {
         #[cfg(feature = "hide_before_raise")]

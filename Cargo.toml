@@ -3,6 +3,8 @@ name = "jset_desk"
 description = "an application for drawing colored Julia sets"
 version = "0.2.8"
 homepage = "https://github.com/d2718/jset-desk"
+repository = "https://github.com/d2718/jset-desk"
+license = "MIT"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -269,62 +269,61 @@ impl GradientChooser {
                 }
             }
         });
-        
+
         sbutt.handle({
             let sc_cell = sc_cell.clone();
             let drag_color = drag_color.clone();
-            move |b, evt| {
-                match evt {
-                    Event::Enter => {
-                        if let Some(c) = drag_color.get() {
-                            b.set_color(rgb_to_fltk(c));
-                            b.redraw();
-                            sc_cell.set(c);
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                    Event::Released => {
-                        drag_color.set(Some(sc_cell.get()));
-                        add_timeout3(0.0, {
-                            let drag_color = drag_color.clone();
-                            move |_| { drag_color.set(None); }
-                        });
+            move |b, evt| match evt {
+                Event::Enter => {
+                    if let Some(c) = drag_color.get() {
+                        b.set_color(rgb_to_fltk(c));
+                        b.redraw();
+                        sc_cell.set(c);
                         true
-                    },
-                    _ => false,
+                    } else {
+                        false
+                    }
                 }
+                Event::Released => {
+                    drag_color.set(Some(sc_cell.get()));
+                    add_timeout3(0.0, {
+                        let drag_color = drag_color.clone();
+                        move |_| {
+                            drag_color.set(None);
+                        }
+                    });
+                    true
+                }
+                _ => false,
             }
         });
         ebutt.handle({
             let ec_cell = ec_cell.clone();
-            let drag_color = drag_color.clone();
-            move |b, evt| {
-                match evt {
-                    Event::Enter => {
-                        if let Some(c) = drag_color.get() {
-                            b.set_color(rgb_to_fltk(c));
-                            b.redraw();
-                            ec_cell.set(c);
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                    Event::Released => {
-                        drag_color.set(Some(ec_cell.get()));
-                        add_timeout3(0.0, {
-                            let drag_color = drag_color.clone();
-                            move |_| { drag_color.set(None); }
-                        });
+            let drag_color = drag_color;
+            move |b, evt| match evt {
+                Event::Enter => {
+                    if let Some(c) = drag_color.get() {
+                        b.set_color(rgb_to_fltk(c));
+                        b.redraw();
+                        ec_cell.set(c);
                         true
-                    },
-                    _ => false,
+                    } else {
+                        false
+                    }
                 }
+                Event::Released => {
+                    drag_color.set(Some(ec_cell.get()));
+                    add_timeout3(0.0, {
+                        let drag_color = drag_color.clone();
+                        move |_| {
+                            drag_color.set(None);
+                        }
+                    });
+                    true
+                }
+                _ => false,
             }
         });
-
 
         GradientChooser {
             win: w,
@@ -388,7 +387,7 @@ impl ColorPaneGuts {
         w.end();
 
         setup_subwindow_behavior(&mut w, pipe);
-        
+
         let drag_color: Rc<Cell<Option<RGB>>> = Rc::new(Cell::new(None));
 
         let pg = Rc::new(RefCell::new(ColorPaneGuts {
@@ -506,28 +505,28 @@ impl ColorPaneGuts {
         default_select.handle({
             let drag_color = self.drag_color.clone();
             let me = self.me.as_ref().unwrap().clone();
-            move |b, evt| {
-                match evt {
-                    Event::Enter => {
-                        if let Some(c) = drag_color.get() {
-                            b.set_color(rgb_to_fltk(c));
-                            me.borrow_mut().default_color = c;
-                            b.redraw();
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                    Event::Released => {
-                        drag_color.set(Some(me.borrow().default_color));
-                        add_timeout3(0.0, {
-                            let drag_color = drag_color.clone();
-                            move |_| { drag_color.set(None); }
-                        });
+            move |b, evt| match evt {
+                Event::Enter => {
+                    if let Some(c) = drag_color.get() {
+                        b.set_color(rgb_to_fltk(c));
+                        me.borrow_mut().default_color = c;
+                        b.redraw();
                         true
-                    },
-                    _ => false,
+                    } else {
+                        false
+                    }
                 }
+                Event::Released => {
+                    drag_color.set(Some(me.borrow().default_color));
+                    add_timeout3(0.0, {
+                        let drag_color = drag_color.clone();
+                        move |_| {
+                            drag_color.set(None);
+                        }
+                    });
+                    true
+                }
+                _ => false,
             }
         });
     }
@@ -639,8 +638,13 @@ impl ColorPane {
     }
 
     /**
-    Raise pane to the top by hiding then showing its window. It seems
-    like there should be a more direct way to do this.
+    "Focus" the window.
+
+    On some systems, evidently, just calling `DoubleWindow::show()` won't
+    cut it; you can work aound this by first hiding the window, then calling
+    it, hence the feature. If you notice that the color map specification
+    window doesn't raise when you hit alt-z, try compling with the
+    `hide_before_raise` feature.
     */
     pub fn raise(&mut self) {
         let w = &mut self.guts.borrow_mut().win;

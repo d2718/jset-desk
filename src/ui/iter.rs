@@ -349,8 +349,13 @@ impl IterPane {
     }
 
     /**
-    Raise pane to the top by hiding then showing its window. It seems
-    like there should be a more direct way to do this.
+    "Focus" the window.
+
+    On some systems, evidently, just calling `DoubleWindow::show()` won't
+    cut it; you can work aound this by first hiding the window, then calling
+    it, hence the feature. If you notice that the iteration specification
+    window doesn't raise when you hit alt-a, try compling with the
+    `hide_before_raise` feature.
     */
     pub fn raise(&mut self) {
         #[cfg(feature = "hide_before_raise")]
